@@ -2,7 +2,9 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>装修预算表管理系统</title>
     <style>
         * {
@@ -27,6 +29,14 @@
             overflow: hidden;
         }
 
+        @media (max-width: 768px) {
+            .container {
+                border-radius: 0;
+                min-height: 100vh;
+                box-shadow: none;
+            }
+        }
+
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -39,6 +49,19 @@
             margin-bottom: 10px;
         }
 
+        @media (max-width: 768px) {
+            .header {
+                padding: 20px 15px;
+            }
+            .header h1 {
+                font-size: 20px;
+                margin-bottom: 5px;
+            }
+            .header p {
+                font-size: 13px;
+            }
+        }
+
         .toolbar {
             padding: 20px 30px;
             background: #f8f9fa;
@@ -47,6 +70,48 @@
             gap: 15px;
             flex-wrap: wrap;
             align-items: center;
+        }
+
+        .toolbar-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 0;
+        }
+
+        @media (max-width: 768px) {
+            .toolbar {
+                padding: 12px 10px;
+                gap: 10px;
+            }
+            .toolbar-row {
+                width: 100%;
+            }
+            .toolbar-row .btn {
+                flex: 1;
+                min-width: 0;
+            }
+            .toolbar-info {
+                width: 100%;
+                border-top: 1px solid #dee2e6;
+                margin-top: 5px;
+                padding-top: 10px;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .toolbar-row {
+                flex: 1;
+            }
+            .toolbar-info {
+                margin-left: auto;
+            }
         }
 
         .btn {
@@ -59,7 +124,20 @@
             transition: all 0.3s;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        @media (max-width: 768px) {
+            .btn {
+                padding: 12px 16px;
+                font-size: 14px;
+                width: 100%;
+                min-height: 44px; /* 移动端最小触摸区域 */
+                border-radius: 8px;
+            }
         }
 
         .btn-primary {
@@ -120,6 +198,13 @@
             overflow: hidden;
         }
 
+        @media (max-width: 768px) {
+            .category-section {
+                margin-bottom: 20px;
+                border-radius: 6px;
+            }
+        }
+
         .category-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -138,12 +223,34 @@
 
         .table-wrapper {
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (max-width: 768px) {
+            .table-wrapper {
+                margin: 0 -10px;
+                padding: 0 10px;
+            }
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
             background: white;
+            min-width: 800px; /* 移动端横向滚动 */
+        }
+
+        @media (max-width: 768px) {
+            table {
+                font-size: 12px;
+            }
+            th, td {
+                padding: 8px 6px;
+                font-size: 12px;
+            }
+            th {
+                font-size: 11px;
+            }
         }
 
         thead {
@@ -168,6 +275,7 @@
 
         tbody tr {
             transition: background 0.2s;
+            cursor: pointer;
         }
 
         tbody tr:hover {
@@ -176,6 +284,75 @@
 
         tbody tr.selected {
             background: #e7f3ff;
+        }
+
+        /* 桌面端显示操作列 */
+        .desktop-only {
+            display: table-cell;
+        }
+
+        /* 移动端：整行可点击，更紧凑 */
+        @media (max-width: 768px) {
+            /* 隐藏操作列和复选框列 */
+            .desktop-only,
+            .checkbox-cell {
+                display: none !important;
+            }
+            
+            /* 整行可点击 */
+            tbody tr[data-item-id] {
+                cursor: pointer;
+            }
+            
+            /* 减小行间距，更紧凑 */
+            td {
+                padding: 6px 4px;
+                font-size: 11px;
+                border-bottom: 1px solid #e9ecef;
+            }
+            
+            th {
+                padding: 6px 4px;
+                font-size: 10px;
+            }
+            
+            /* 减小表格整体间距 */
+            .category-section {
+                margin-bottom: 12px;
+            }
+            
+            /* 更紧凑的字体和间距 */
+            .content {
+                padding: 10px 5px;
+            }
+            
+            .header {
+                padding: 15px 10px;
+            }
+            
+            .header h1 {
+                font-size: 18px;
+                margin-bottom: 3px;
+            }
+            
+            .header p {
+                font-size: 12px;
+            }
+            
+            .category-header {
+                padding: 8px 10px;
+                font-size: 13px;
+            }
+            
+            /* 项目名称加粗但字体稍小 */
+            td strong {
+                font-size: 12px;
+            }
+            
+            /* 移动端隐藏删除按钮（因为没有复选框了） */
+            #deleteBtn {
+                display: none !important;
+            }
         }
 
         .checkbox-cell {
@@ -219,6 +396,17 @@
             max-height: 90vh;
             overflow-y: auto;
             box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 100%;
+                max-width: 100%;
+                max-height: 100vh;
+                border-radius: 0;
+                padding: 20px 15px;
+            }
         }
 
         .modal-header {
@@ -273,11 +461,29 @@
             gap: 15px;
         }
 
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+        }
+
         .modal-actions {
             display: flex;
             gap: 10px;
             justify-content: flex-end;
             margin-top: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .modal-actions {
+                flex-direction: column-reverse;
+                gap: 10px;
+                margin-top: 20px;
+            }
+            .modal-actions .btn {
+                width: 100%;
+            }
         }
 
         .loading {
@@ -447,6 +653,139 @@
 
         .config-help li {
             margin: 5px 0;
+        }
+
+        /* ========== 移动端优化 (H5风格) ========== */
+        @media (max-width: 768px) {
+            /* 全局优化 */
+            * {
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            /* 按钮组优化 */
+            .toolbar-row {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                width: 100%;
+            }
+
+            .toolbar-row .btn {
+                width: 100%;
+                margin: 0;
+            }
+
+            /* 快速添加区域 */
+            .ai-input-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .ai-input-textarea {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+
+            .ai-input-actions {
+                width: 100%;
+                flex-direction: column;
+            }
+
+            .ai-input-actions .btn {
+                width: 100%;
+            }
+
+            /* 表格优化 - 卡片式显示 */
+            .table-wrapper {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            table {
+                min-width: 700px; /* 减小最小宽度，更紧凑（移除了复选框列） */
+            }
+
+            /* 分类标题 */
+            .category-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .category-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            /* 总计显示优化 */
+            .summary {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+                font-size: 14px;
+            }
+
+            /* 模态框标题 */
+            .modal-header h2 {
+                font-size: 20px;
+            }
+
+            /* 表单输入优化 */
+            .form-group input,
+            .form-group select,
+            .form-group textarea {
+                font-size: 16px; /* 防止iOS自动缩放 */
+                padding: 12px;
+            }
+
+            /* 状态消息 */
+            .status-message {
+                margin: 10px;
+                padding: 12px 15px;
+                font-size: 14px;
+            }
+
+            /* 空状态 */
+            .empty-state {
+                padding: 40px 20px;
+                font-size: 14px;
+            }
+        }
+
+        /* 超小屏幕优化 */
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .toolbar-row {
+                grid-template-columns: 1fr;
+            }
+
+            .category-header {
+                font-size: 14px;
+                padding: 10px 12px;
+            }
+
+            table {
+                font-size: 11px;
+            }
+
+            th, td {
+                padding: 6px 4px;
+            }
+        }
+
+        /* 桌面端保持原样 */
+        @media (min-width: 769px) {
+            .toolbar-row {
+                display: flex;
+                gap: 10px;
+            }
+
+            .toolbar-info {
+                margin-left: auto;
+            }
         }
     </style>
 </head>
@@ -710,7 +1049,7 @@
                 html += `<th class="number-cell">实际花费</th>`;
                 html += `<th class="number-cell">差价</th>`;
                 html += `<th>备注</th>`;
-                html += `<th class="action-cell">操作</th>`;
+                html += `<th class="action-cell desktop-only">操作</th>`;
                 html += `</tr></thead><tbody>`;
 
                 let categoryTotal2nd = 0;
@@ -741,7 +1080,7 @@
                         html += `<td class="number-cell"><strong>${formatNumber(item['最终实际花费'])}</strong></td>`;
                         html += `<td class="number-cell">${formatNumber(item['差价'])}</td>`;
                         html += `<td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item['备注'] || '')}">${escapeHtml(item['备注'] || '')}</td>`;
-                        html += `<td class="action-cell"><button class="btn btn-primary btn-small" onclick="editItem(${item.id})">编辑</button></td>`;
+                        html += `<td class="action-cell desktop-only"><button class="btn btn-primary btn-small" onclick="event.stopPropagation(); editItem(${item.id})">编辑</button></td>`;
                         html += `</tr>`;
                     });
                 }
@@ -763,8 +1102,9 @@
                 html += `<div class="category-section"><div class="category-header"><span>未分类</span><span style="font-size: 14px; opacity: 0.9;">${uncategorized.length} 项</span></div>`;
                 html += `<div class="table-wrapper"><table><thead><tr>`;
                 html += `<th class="checkbox-cell"><input type="checkbox" class="category-select-all" onchange="toggleCategorySelectAll('未分类', this.checked)"></th>`;
+                html += `<th class="checkbox-cell"><input type="checkbox" class="category-select-all" onchange="toggleCategorySelectAll('未分类', this.checked)"></th>`;
                 html += `<th>序号</th><th>项目名称</th><th>单位</th><th>数量</th>`;
-                html += `<th class="number-cell">1st预算</th><th class="number-cell">2nd预算</th><th class="number-cell">实际花费</th><th class="number-cell">差价</th><th>备注</th><th class="action-cell">操作</th>`;
+                html += `<th class="number-cell">1st预算</th><th class="number-cell">2nd预算</th><th class="number-cell">实际花费</th><th class="number-cell">差价</th><th>备注</th><th class="action-cell desktop-only">操作</th>`;
                 html += `</tr></thead><tbody>`;
                 uncategorized.forEach(item => {
                     html += `<tr data-item-id="${item.id}" data-category="未分类">`;
@@ -778,7 +1118,7 @@
                     html += `<td class="number-cell"><strong>${formatNumber(item['最终实际花费'])}</strong></td>`;
                     html += `<td class="number-cell">${formatNumber(item['差价'])}</td>`;
                     html += `<td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item['备注'] || '')}">${escapeHtml(item['备注'] || '')}</td>`;
-                    html += `<td class="action-cell"><button class="btn btn-primary btn-small" onclick="editItem(${item.id})">编辑</button></td>`;
+                    html += `<td class="action-cell desktop-only"><button class="btn btn-primary btn-small" onclick="event.stopPropagation(); editItem(${item.id})">编辑</button></td>`;
                     html += `</tr>`;
                 });
                 html += `</tbody></table></div></div>`;
@@ -806,14 +1146,39 @@
             totalHtml += `<span>📊 总计</span>`;
             totalHtml += `</div>`;
             totalHtml += `<div class="summary" style="padding: 20px; font-size: 16px; text-align: center;">`;
-            totalHtml += `<span style="font-weight: 600;">总合计：</span>`;
-            totalHtml += `<span style="margin: 0 15px;">2nd预算 <strong style="color: #667eea; font-size: 18px;">${formatNumber(grandTotal2nd.toFixed(2))}</strong> 元 | </span>`;
-            totalHtml += `<span style="margin: 0 15px;">实际花费 <strong style="color: #28a745; font-size: 18px;">${formatNumber(grandTotalActual.toFixed(2))}</strong> 元 | </span>`;
-            totalHtml += `<span style="margin: 0 15px;">差价 <strong style="color: ${grandTotalDiff >= 0 ? '#28a745' : '#dc3545'}; font-size: 18px;">${formatNumber(grandTotalDiff.toFixed(2))}</strong> 元</span>`;
+            totalHtml += `<div style="font-weight: 600; margin-bottom: 10px;">总合计</div>`;
+            totalHtml += `<div style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; align-items: center;">`;
+            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">2nd预算</div><strong style="color: #667eea; font-size: 20px;">${formatNumber(grandTotal2nd.toFixed(2))}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
+            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">实际花费</div><strong style="color: #28a745; font-size: 20px;">${formatNumber(grandTotalActual.toFixed(2))}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
+            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">差价</div><strong style="color: ${grandTotalDiff >= 0 ? '#28a745' : '#dc3545'}; font-size: 20px;">${formatNumber(grandTotalDiff.toFixed(2))}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
+            totalHtml += `</div>`;
             totalHtml += `</div>`;
             totalHtml += `</div>`;
 
             container.innerHTML = totalHtml + html;
+            
+            // 移动端：为表格行添加点击事件（整行可点击编辑）
+            // 移动端已隐藏复选框，所以整行都可以点击
+            document.querySelectorAll('tbody tr[data-item-id]').forEach(row => {
+                const itemId = row.dataset.itemId;
+                if (itemId) {
+                    // 移动端：整行可点击编辑
+                    if (window.innerWidth <= 768) {
+                        row.addEventListener('click', function(e) {
+                            editItem(parseInt(itemId));
+                        });
+                        row.style.transition = 'background 0.2s';
+                    } else {
+                        // 桌面端：只有点击非复选框区域才编辑
+                        row.addEventListener('click', function(e) {
+                            if (e.target.type === 'checkbox' || e.target.closest('.checkbox-cell') || e.target.closest('.action-cell')) {
+                                return;
+                            }
+                            editItem(parseInt(itemId));
+                        });
+                    }
+                }
+            });
         }
 
         // 更新分类选择器

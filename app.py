@@ -1708,6 +1708,7 @@ if __name__ == '__main__':
     import os
     # 检查环境变量，生产环境不使用debug模式
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    # 默认监听本地，可通过环境变量FLASK_HOST=0.0.0.0允许局域网访问
     host = os.getenv('FLASK_HOST', '127.0.0.1')
     port = int(os.getenv('FLASK_PORT', '5000'))
     
