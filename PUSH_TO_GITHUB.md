@@ -27,7 +27,7 @@
    cd /Users/gzn/gaozn/code/hxt
    
    # 添加远程仓库（替换YOUR_USERNAME为你的GitHub用户名）
-   git remote add origin https://github.com/YOUR_USERNAME/budget-app.git
+   git remote add origin https://github.com/ZhanningGao/budget-app.git
    
    # 推送代码
    git branch -M main
