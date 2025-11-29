@@ -42,6 +42,10 @@ app = Flask(__name__)
 DATA_DIR = os.getenv('DATA_DIR', '.')
 app.config['UPLOAD_FOLDER'] = os.path.join(DATA_DIR, 'uploads')
 app.config['EXPORT_FOLDER'] = os.path.join(DATA_DIR, 'exports')
+
+# 确保目录存在（Railway部署时需要）
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['EXPORT_FOLDER'], exist_ok=True)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 
