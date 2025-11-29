@@ -1,0 +1,29 @@
+# fly.toml app configuration file generated for budget-app
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+
+app = "budget-app"
+primary_region = "hkg"  # 香港，国内访问较快
+
+[build]
+
+[env]
+  FLASK_ENV = "production"
+  PYTHONUNBUFFERED = "1"
+
+[http_service]
+  internal_port = 5000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory_mb = 512
+  cpu_kind = "shared"
+  cpus = 1
+
+[[mounts]]
+  source = "budget_data"
+  destination = "/app/data"
+

@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>装修预算表管理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .toolbar {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-small {
+            padding: 5px 12px;
+            font-size: 12px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .category-section {
+            margin-bottom: 40px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .category-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .category-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        thead {
+            background: #f8f9fa;
+        }
+
+        th {
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+            white-space: nowrap;
+            font-size: 13px;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #dee2e6;
+            font-size: 14px;
+        }
+
+        tbody tr {
+            transition: background 0.2s;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        tbody tr.selected {
+            background: #e7f3ff;
+        }
+
+        .checkbox-cell {
+            text-align: center;
+            width: 50px;
+        }
+
+        .action-cell {
+            text-align: center;
+            width: 100px;
+        }
+
+        .number-cell {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .modal-header h2 {
+            color: #495057;
+            font-size: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #495057;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .status-message {
+            padding: 12px 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .summary {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            font-weight: 500;
+        }
+
+        .ai-input-section {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px 30px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .ai-input-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .ai-input-container {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .ai-input-textarea {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 60px;
+            transition: border-color 0.3s;
+        }
+
+        .ai-input-textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .ai-input-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .ai-preview {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .ai-preview-item {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .ai-preview-item:last-child {
+            border-bottom: none;
+        }
+
+        .ai-preview-label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .ai-preview-value {
+            color: #212529;
+        }
+
+        .ai-preview-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .config-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .config-modal.active {
+            display: flex;
+        }
+
+        .config-modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .config-help {
+            background: #e7f3ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .config-help h4 {
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+
+        .config-help ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .config-help li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏠 装修预算表管理系统</h1>
+            <p>便捷管理您的装修项目</p>
+        </div>
+
+        <div class="toolbar">
+            <button class="btn btn-primary" onclick="loadData()">🔄 刷新数据</button>
+            <button class="btn btn-success" onclick="showAddModal()">➕ 添加项目</button>
+            <button class="btn btn-success" onclick="showAddCategoryModal()" style="background: #17a2b8;">📁 新增分类</button>
+            <button class="btn btn-danger" onclick="deleteSelected()" id="deleteBtn" disabled>🗑️ 删除选中</button>
+            <button class="btn btn-secondary" onclick="showImportModal()" style="background: #ffc107; color: #000;">📤 导入Excel</button>
+            <button class="btn btn-secondary" onclick="exportFile()">📥 导出Excel</button>
+            <button class="btn btn-secondary" onclick="exportPDF()" style="background: #dc3545;">📄 导出PDF</button>
+            <div style="flex: 1;"></div>
+            <span id="itemCount" style="color: #6c757d; font-weight: 500;">共 0 项</span>
+        </div>
+
+        <!-- 快速输入区域 -->
+        <div class="ai-input-section">
+            <div class="ai-input-header">
+                <div>
+                    <span style="font-weight: 600; color: #667eea;">⚡ 快速添加</span>
+                    <span style="font-size: 12px; margin-left: 10px; color: #6c757d;">输入文本自动解析并添加项目</span>
+                </div>
+            </div>
+            <div class="ai-input-container">
+                <textarea 
+                    id="aiInput" 
+                    class="ai-input-textarea" 
+                    placeholder="例如：全屋基础装修，1套，预算24500元，实际花费24500元，备注：黄江工长，赵娅娜介绍"
+                    rows="2"></textarea>
+                <div class="ai-input-actions">
+                    <button class="btn btn-primary" onclick="parseAndPreview()">🔍 解析预览</button>
+                    <button class="btn btn-success" onclick="parseAndAdd()">✨ 直接添加</button>
+                </div>
+            </div>
+            <div id="aiPreview" class="ai-preview" style="display: none;"></div>
+        </div>
+
+        <div class="content">
+            <div id="statusMessage" class="status-message"></div>
+            <div id="loading" class="loading" style="display: none;">
+                <p>加载中...</p>
+            </div>
+            <div id="contentContainer"></div>
+        </div>
+    </div>
+
+    <!-- 导入Excel模态框 -->
+    <div id="importModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2>导入Excel文件</h2>
+            </div>
+            <div class="config-help" style="margin-bottom: 20px;">
+                <h4>导入要求：</h4>
+                <ul style="margin: 5px 0; padding-left: 20px;">
+                    <li>文件格式：.xlsx 或 .xls</li>
+                    <li>必须包含分类行（以"一、"、"二、"等开头）</li>
+                    <li>必须包含表头行（包含"序号"和"项目"列）</li>
+                    <li>导入前会自动备份当前文件</li>
+                </ul>
+            </div>
+            <form id="importForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label>选择Excel文件 *</label>
+                    <input type="file" id="importFileInput" name="file" accept=".xlsx,.xls" required>
+                    <small style="color: #6c757d; font-size: 12px; margin-top: 5px; display: block;">
+                        支持 .xlsx 和 .xls 格式，最大 16MB
+                    </small>
+                </div>
+                <div id="importValidation" style="display: none; margin: 15px 0;"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeImportModal()">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="validateImportFile()">🔍 验证格式</button>
+                    <button type="submit" class="btn btn-success">✅ 确认导入</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 新增分类模态框 -->
+    <div id="categoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>新增分类</h2>
+            </div>
+            <form id="categoryForm">
+                <div class="form-group">
+                    <label>分类名称 *</label>
+                    <input type="text" id="categoryNameInput" placeholder="例如：全屋基装、全屋柜子" required>
+                    <small style="color: #6c757d; font-size: 12px; margin-top: 5px; display: block;">
+                        输入分类名称，系统会自动创建分类、表头和合计行
+                    </small>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeCategoryModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">创建分类</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 添加/编辑模态框 -->
+    <div id="itemModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">添加项目</h2>
+            </div>
+            <form id="itemForm">
+                <div class="form-group">
+                    <label>分类 *</label>
+                    <select name="category" id="categorySelect" required>
+                        <option value="">请选择分类</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>项目名称 *</label>
+                    <input type="text" name="项目" required placeholder="例如：全屋基础装修">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>单位</label>
+                        <input type="text" name="单位" placeholder="例如：套、个、米">
+                    </div>
+                    <div class="form-group">
+                        <label>预算数量</label>
+                        <input type="text" name="预算数量" placeholder="例如：1、3">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>1st 预算费用（元）</label>
+                        <input type="number" name="1st预算费用" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>2nd 预算费用（元）</label>
+                        <input type="number" name="2nd预算费用" step="0.01" placeholder="默认等于1st预算" oninput="calculateDiff()">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>最终实际花费（元）</label>
+                        <input type="number" name="最终实际花费" step="0.01" placeholder="默认0" oninput="calculateDiff()">
+                    </div>
+                    <div class="form-group">
+                        <label>差价（元）</label>
+                        <input type="text" name="差价" id="diffInput" placeholder="自动计算（2nd预算 - 实际花费）" readonly style="background: #f8f9fa;">
+                        <small style="color: #6c757d; font-size: 12px; margin-top: 5px; display: block;">
+                            差价 = 2nd预算 - 实际花费（自动计算）
+                        </small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>备注</label>
+                    <textarea name="备注" placeholder="选购意向、品牌、型号等信息"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let categories = [];
+        let items = [];
+        let editingItemId = null;
+
+        // 字段显示名称映射
+        const fieldLabels = {
+            '序号': '序号',
+            '项目': '项目名称',
+            '单位': '单位',
+            '预算数量': '数量',
+            '1st预算费用': '1st预算',
+            '最终实际花费': '实际花费',
+            '2nd预算费用': '2nd预算',
+            '差价': '差价',
+            '备注': '备注'
+        };
+
+        // 加载数据
+        async function loadData() {
+            const loading = document.getElementById('loading');
+            const contentContainer = document.getElementById('contentContainer');
+            
+            loading.style.display = 'block';
+            contentContainer.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/load');
+                const result = await response.json();
+
+                if (result.success) {
+                    categories = result.categories || [];
+                    items = result.items || [];
+                    renderContent();
+                    updateCategorySelect();
+                    showMessage('数据加载成功', 'success');
+                } else {
+                    showMessage('加载失败: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('加载失败: ' + error.message, 'error');
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // 渲染内容
+        function renderContent() {
+            const container = document.getElementById('contentContainer');
+            const itemCount = document.getElementById('itemCount');
+            
+            if (items.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>暂无数据</p><p style="margin-top: 10px; font-size: 14px;">点击"添加项目"开始添加数据</p></div>';
+                itemCount.textContent = '共 0 项';
+                return;
+            }
+
+            itemCount.textContent = `共 ${items.length} 项`;
+
+            let html = '';
+            
+            // 按分类组织数据
+            const itemsByCategory = {};
+            items.forEach(item => {
+                const cat = item.category || '未分类';
+                if (!itemsByCategory[cat]) {
+                    itemsByCategory[cat] = [];
+                }
+                itemsByCategory[cat].push(item);
+            });
+
+            // 渲染每个分类
+            categories.forEach(category => {
+                const categoryItems = itemsByCategory[category] || [];
+                // 即使没有项目也显示分类（允许添加项目）
+
+                html += `<div class="category-section" data-category="${escapeHtml(category)}">`;
+                html += `<div class="category-header">`;
+                html += `<span>${escapeHtml(category)}</span>`;
+                html += `<span style="font-size: 14px; opacity: 0.9;">${categoryItems.length} 项</span>`;
+                html += `</div>`;
+                html += `<div class="table-wrapper">`;
+                html += `<table><thead><tr>`;
+                html += `<th class="checkbox-cell"><input type="checkbox" class="category-select-all" onchange="toggleCategorySelectAll('${escapeHtml(category)}', this.checked)"></th>`;
+                html += `<th>序号</th>`;
+                html += `<th>项目名称</th>`;
+                html += `<th>单位</th>`;
+                html += `<th>数量</th>`;
+                html += `<th class="number-cell">1st预算</th>`;
+                html += `<th class="number-cell">2nd预算</th>`;
+                html += `<th class="number-cell">实际花费</th>`;
+                html += `<th class="number-cell">差价</th>`;
+                html += `<th>备注</th>`;
+                html += `<th class="action-cell">操作</th>`;
+                html += `</tr></thead><tbody>`;
+
+                let categoryTotal2nd = 0;
+                let categoryTotalActual = 0;
+                let categoryTotalDiff = 0;
+                
+                if (categoryItems.length === 0) {
+                    // 空分类显示提示
+                    html += `<tr><td colspan="11" style="text-align: center; padding: 40px; color: #6c757d;">暂无项目，点击"添加项目"开始添加</td></tr>`;
+                } else {
+                    categoryItems.forEach(item => {
+                        const val2nd = parseFloat(item['2nd预算费用']) || 0;
+                        const valActual = parseFloat(item['最终实际花费']) || 0;
+                        const valDiff = parseFloat(item['差价']) || 0;
+                        
+                        categoryTotal2nd += val2nd;
+                        categoryTotalActual += valActual;
+                        categoryTotalDiff += valDiff;
+                        
+                        html += `<tr data-item-id="${item.id}" data-category="${escapeHtml(category)}">`;
+                        html += `<td class="checkbox-cell"><input type="checkbox" class="row-checkbox" onchange="updateDeleteButton()"></td>`;
+                        html += `<td>${item['序号'] || ''}</td>`;
+                        html += `<td><strong>${escapeHtml(item['项目'] || '')}</strong></td>`;
+                        html += `<td>${escapeHtml(item['单位'] || '')}</td>`;
+                        html += `<td>${escapeHtml(item['预算数量'] || '')}</td>`;
+                        html += `<td class="number-cell">${formatNumber(item['1st预算费用'])}</td>`;
+                        html += `<td class="number-cell">${formatNumber(item['2nd预算费用'])}</td>`;
+                        html += `<td class="number-cell"><strong>${formatNumber(item['最终实际花费'])}</strong></td>`;
+                        html += `<td class="number-cell">${formatNumber(item['差价'])}</td>`;
+                        html += `<td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item['备注'] || '')}">${escapeHtml(item['备注'] || '')}</td>`;
+                        html += `<td class="action-cell"><button class="btn btn-primary btn-small" onclick="editItem(${item.id})">编辑</button></td>`;
+                        html += `</tr>`;
+                    });
+                }
+
+                html += `</tbody></table>`;
+                html += `<div class="summary">`;
+                html += `<span>本分类合计：`;
+                html += `2nd预算 <strong>${formatNumber(categoryTotal2nd.toFixed(2))}</strong> 元 | `;
+                html += `实际花费 <strong>${formatNumber(categoryTotalActual.toFixed(2))}</strong> 元 | `;
+                html += `差价 <strong>${formatNumber(categoryTotalDiff.toFixed(2))}</strong> 元`;
+                html += `</span>`;
+                html += `</div>`;
+                html += `</div></div>`;
+            });
+
+            // 渲染未分类项目
+            const uncategorized = itemsByCategory['未分类'] || [];
+            if (uncategorized.length > 0) {
+                html += `<div class="category-section"><div class="category-header"><span>未分类</span><span style="font-size: 14px; opacity: 0.9;">${uncategorized.length} 项</span></div>`;
+                html += `<div class="table-wrapper"><table><thead><tr>`;
+                html += `<th class="checkbox-cell"><input type="checkbox" class="category-select-all" onchange="toggleCategorySelectAll('未分类', this.checked)"></th>`;
+                html += `<th>序号</th><th>项目名称</th><th>单位</th><th>数量</th>`;
+                html += `<th class="number-cell">1st预算</th><th class="number-cell">2nd预算</th><th class="number-cell">实际花费</th><th class="number-cell">差价</th><th>备注</th><th class="action-cell">操作</th>`;
+                html += `</tr></thead><tbody>`;
+                uncategorized.forEach(item => {
+                    html += `<tr data-item-id="${item.id}" data-category="未分类">`;
+                    html += `<td class="checkbox-cell"><input type="checkbox" class="row-checkbox" onchange="updateDeleteButton()"></td>`;
+                    html += `<td>${item['序号'] || ''}</td>`;
+                    html += `<td><strong>${escapeHtml(item['项目'] || '')}</strong></td>`;
+                    html += `<td>${escapeHtml(item['单位'] || '')}</td>`;
+                    html += `<td>${escapeHtml(item['预算数量'] || '')}</td>`;
+                    html += `<td class="number-cell">${formatNumber(item['1st预算费用'])}</td>`;
+                    html += `<td class="number-cell">${formatNumber(item['2nd预算费用'])}</td>`;
+                    html += `<td class="number-cell"><strong>${formatNumber(item['最终实际花费'])}</strong></td>`;
+                    html += `<td class="number-cell">${formatNumber(item['差价'])}</td>`;
+                    html += `<td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item['备注'] || '')}">${escapeHtml(item['备注'] || '')}</td>`;
+                    html += `<td class="action-cell"><button class="btn btn-primary btn-small" onclick="editItem(${item.id})">编辑</button></td>`;
+                    html += `</tr>`;
+                });
+                html += `</tbody></table></div></div>`;
+            }
+
+            // 计算总合计
+            let grandTotal2nd = 0;
+            let grandTotalActual = 0;
+            let grandTotalDiff = 0;
+            
+            items.forEach(item => {
+                const val2nd = parseFloat(item['2nd预算费用']) || 0;
+                const valActual = parseFloat(item['最终实际花费']) || 0;
+                const valDiff = parseFloat(item['差价']) || 0;
+                
+                grandTotal2nd += val2nd;
+                grandTotalActual += valActual;
+                grandTotalDiff += valDiff;
+            });
+
+            // 在开头添加总合计显示
+            let totalHtml = '';
+            totalHtml += `<div class="category-section" style="background: #f8f9fa; border: 2px solid #667eea; margin-bottom: 20px;">`;
+            totalHtml += `<div class="category-header" style="background: #667eea; color: white; padding: 15px; font-size: 18px; font-weight: bold;">`;
+            totalHtml += `<span>📊 总计</span>`;
+            totalHtml += `</div>`;
+            totalHtml += `<div class="summary" style="padding: 20px; font-size: 16px; text-align: center;">`;
+            totalHtml += `<span style="font-weight: 600;">总合计：</span>`;
+            totalHtml += `<span style="margin: 0 15px;">2nd预算 <strong style="color: #667eea; font-size: 18px;">${formatNumber(grandTotal2nd.toFixed(2))}</strong> 元 | </span>`;
+            totalHtml += `<span style="margin: 0 15px;">实际花费 <strong style="color: #28a745; font-size: 18px;">${formatNumber(grandTotalActual.toFixed(2))}</strong> 元 | </span>`;
+            totalHtml += `<span style="margin: 0 15px;">差价 <strong style="color: ${grandTotalDiff >= 0 ? '#28a745' : '#dc3545'}; font-size: 18px;">${formatNumber(grandTotalDiff.toFixed(2))}</strong> 元</span>`;
+            totalHtml += `</div>`;
+            totalHtml += `</div>`;
+
+            container.innerHTML = totalHtml + html;
+        }
+
+        // 更新分类选择器
+        function updateCategorySelect() {
+            const select = document.getElementById('categorySelect');
+            select.innerHTML = '<option value="">请选择分类</option>';
+            categories.forEach(cat => {
+                select.innerHTML += `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`;
+            });
+        }
+
+        // 显示添加模态框
+        function showAddModal() {
+            editingItemId = null;
+            document.getElementById('modalTitle').textContent = '添加项目';
+            document.getElementById('itemForm').reset();
+            document.getElementById('itemModal').classList.add('active');
+        }
+
+        // 编辑项目
+        function editItem(itemId) {
+            const item = items.find(i => i.id === itemId);
+            if (!item) return;
+
+            editingItemId = itemId;
+            document.getElementById('modalTitle').textContent = '编辑项目';
+            
+            // 填充表单
+            document.getElementById('categorySelect').value = item.category || '';
+            document.querySelector('[name="项目"]').value = item['项目'] || '';
+            document.querySelector('[name="单位"]').value = item['单位'] || '';
+            document.querySelector('[name="预算数量"]').value = item['预算数量'] || '';
+            document.querySelector('[name="1st预算费用"]').value = item['1st预算费用'] || '';
+            document.querySelector('[name="最终实际花费"]').value = item['最终实际花费'] || '';
+            document.querySelector('[name="2nd预算费用"]').value = item['2nd预算费用'] || '';
+            // 自动计算差价
+            calculateDiff();
+            document.querySelector('[name="备注"]').value = item['备注'] || '';
+            
+            document.getElementById('itemModal').classList.add('active');
+        }
+
+        // 计算差价
+        function calculateDiff() {
+            const val2nd = parseFloat(document.querySelector('[name="2nd预算费用"]').value) || 0;
+            const valActual = parseFloat(document.querySelector('[name="最终实际花费"]').value) || 0;
+            const diff = val2nd - valActual;
+            const diffInput = document.getElementById('diffInput');
+            if (diffInput) {
+                diffInput.value = diff.toFixed(2);
+            }
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('itemModal').classList.remove('active');
+            document.getElementById('itemForm').reset();
+            editingItemId = null;
+        }
+
+        // 提交表单
+        document.getElementById('itemForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const category = formData.get('category');
+            
+            // 自动计算差价
+            const val2nd = parseFloat(formData.get('2nd预算费用')) || 0;
+            const valActual = parseFloat(formData.get('最终实际花费')) || 0;
+            const diff = val2nd - valActual;
+            
+            const item = {
+                '项目': formData.get('项目'),
+                '单位': formData.get('单位'),
+                '预算数量': formData.get('预算数量'),
+                '1st预算费用': formData.get('1st预算费用'),
+                '最终实际花费': formData.get('最终实际花费'),
+                '2nd预算费用': formData.get('2nd预算费用'),
+                '差价': diff.toFixed(2),
+                '备注': formData.get('备注')
+            };
+
+            try {
+                if (editingItemId !== null) {
+                    // 更新
+                    item.id = editingItemId;
+                    const response = await fetch('/api/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ item })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        showMessage(result.message, 'success');
+                        closeModal();
+                        loadData();
+                    } else {
+                        showMessage('操作失败: ' + result.error, 'error');
+                    }
+                } else {
+                    // 添加
+                    const response = await fetch('/api/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ item, category })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        showMessage(result.message, 'success');
+                        closeModal();
+                        loadData();
+                    } else {
+                        showMessage('操作失败: ' + result.error, 'error');
+                    }
+                }
+            } catch (error) {
+                showMessage('操作失败: ' + error.message, 'error');
+            }
+        });
+
+        // 删除选中项
+        async function deleteSelected() {
+            const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+            const itemIds = Array.from(checkboxes).map(cb => 
+                parseInt(cb.closest('tr').dataset.itemId)
+            );
+
+            if (itemIds.length === 0) {
+                showMessage('请先选择要删除的项目', 'error');
+                return;
+            }
+
+            if (!confirm(`确定要删除选中的 ${itemIds.length} 项吗？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_ids: itemIds })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    loadData();
+                } else {
+                    showMessage('删除失败: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        // 导出文件
+        async function exportFile() {
+            try {
+                const response = await fetch('/api/export');
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `红玺台复式装修预算表_导出_${new Date().toISOString().slice(0,10)}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    showMessage('导出成功', 'success');
+                } else {
+                    showMessage('导出失败', 'error');
+                }
+            } catch (error) {
+                showMessage('导出失败: ' + error.message, 'error');
+            }
+        }
+
+        // 导出PDF
+        async function exportPDF() {
+            console.log('开始导出PDF...');
+            try {
+                showMessage('正在生成PDF，请稍候...', 'success');
+                
+                console.log('发送请求到 /api/export-pdf');
+                const response = await fetch('/api/export-pdf');
+                console.log('收到响应:', response.status, response.statusText);
+                
+                if (response.ok) {
+                    console.log('响应成功，开始处理blob...');
+                    const blob = await response.blob();
+                    console.log('Blob大小:', blob.size, '字节');
+                    
+                    // 检查blob大小，确保不是错误响应
+                    if (blob.size === 0) {
+                        showMessage('PDF导出失败: 生成的文件为空', 'error');
+                        return;
+                    }
+                    
+                    // 检查Content-Type
+                    const contentType = response.headers.get('content-type');
+                    console.log('Content-Type:', contentType);
+                    
+                    if (contentType && !contentType.includes('pdf')) {
+                        // 可能是错误响应，尝试解析JSON
+                        const text = await blob.text();
+                        try {
+                            const result = JSON.parse(text);
+                            showMessage('PDF导出失败: ' + (result.error || '未知错误'), 'error');
+                            return;
+                        } catch (e) {
+                            // 不是JSON，继续处理
+                            console.log('不是JSON响应，继续处理为PDF');
+                        }
+                    }
+                    
+                    console.log('创建下载链接...');
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `红玺台复式装修预算表_导出_${new Date().toISOString().slice(0,10)}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    showMessage('PDF导出成功', 'success');
+                    console.log('PDF导出完成');
+                } else {
+                    // 尝试解析错误信息
+                    let errorMsg = 'PDF导出失败';
+                    try {
+                        const result = await response.json();
+                        errorMsg = result.error || errorMsg;
+                        if (result.traceback) {
+                            console.error('详细错误:', result.traceback);
+                        }
+                    } catch (e) {
+                        errorMsg = `HTTP错误: ${response.status} ${response.statusText}`;
+                    }
+                    showMessage(errorMsg, 'error');
+                    console.error('PDF导出失败:', errorMsg);
+                }
+            } catch (error) {
+                showMessage('PDF导出失败: ' + error.message, 'error');
+                console.error('PDF导出错误:', error);
+            }
+        }
+
+        // 分类全选/取消全选
+        function toggleCategorySelectAll(category, checked) {
+            const rows = document.querySelectorAll(`tr[data-category="${category}"]`);
+            rows.forEach(row => {
+                const checkbox = row.querySelector('.row-checkbox');
+                if (checkbox) checkbox.checked = checked;
+            });
+            updateDeleteButton();
+        }
+
+        // 更新删除按钮状态
+        function updateDeleteButton() {
+            const checked = document.querySelectorAll('.row-checkbox:checked').length;
+            const deleteBtn = document.getElementById('deleteBtn');
+            deleteBtn.disabled = checked === 0;
+        }
+
+        // 显示消息
+        function showMessage(message, type) {
+            const msgEl = document.getElementById('statusMessage');
+            msgEl.textContent = message;
+            msgEl.className = `status-message ${type}`;
+            setTimeout(() => {
+                msgEl.className = 'status-message';
+            }, 3000);
+        }
+
+        // HTML转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 格式化数字
+        function formatNumber(value) {
+            if (!value || value === '' || value === 'nan') return '-';
+            const num = parseFloat(value);
+            if (isNaN(num)) return value;
+            return num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // AI解析预览
+        async function parseAndPreview() {
+            const text = document.getElementById('aiInput').value.trim();
+            if (!text) {
+                showMessage('请输入要解析的文本', 'error');
+                return;
+            }
+
+            const preview = document.getElementById('aiPreview');
+            preview.style.display = 'block';
+            preview.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;">解析中...</div>';
+
+            try {
+                const response = await fetch('/api/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+
+                const result = await response.json();
+                
+                if (result.success && result.item) {
+                    const item = result.item;
+                    let html = '<div style="margin-bottom: 10px; font-weight: 600; color: #495057;">解析结果：</div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">分类：</span><span class="ai-preview-value">' + escapeHtml(item.category || '未分类') + '</span></div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">项目名称：</span><span class="ai-preview-value">' + escapeHtml(item['项目'] || '') + '</span></div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">单位：</span><span class="ai-preview-value">' + escapeHtml(item['单位'] || '-') + '</span></div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">数量：</span><span class="ai-preview-value">' + escapeHtml(item['预算数量'] || '-') + '</span></div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">1st预算：</span><span class="ai-preview-value">' + formatNumber(item['1st预算费用']) + '</span></div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">2nd预算：</span><span class="ai-preview-value">' + formatNumber(item['2nd预算费用']) + '</span></div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">实际花费：</span><span class="ai-preview-value">' + formatNumber(item['最终实际花费']) + '</span></div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">备注：</span><span class="ai-preview-value">' + escapeHtml(item['备注'] || '-') + '</span></div>';
+                    html += '<div class="ai-preview-actions">';
+                    html += '<button class="btn btn-secondary btn-small" onclick="closePreview()">取消</button>';
+                    html += '<button class="btn btn-success btn-small" onclick="confirmAddFromPreview()">确认添加</button>';
+                    html += '</div>';
+                    preview.innerHTML = html;
+                    preview.dataset.parsedItem = JSON.stringify(result.item);
+                } else {
+                    preview.innerHTML = '<div style="color: #dc3545; padding: 20px;">解析失败: ' + (result.error || '未知错误') + '</div>';
+                }
+            } catch (error) {
+                preview.innerHTML = '<div style="color: #dc3545; padding: 20px;">解析失败: ' + error.message + '</div>';
+            }
+        }
+
+        // 直接解析并添加
+        async function parseAndAdd() {
+            const text = document.getElementById('aiInput').value.trim();
+            if (!text) {
+                showMessage('请输入要解析的文本', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/parse-and-add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    document.getElementById('aiInput').value = '';
+                    document.getElementById('aiPreview').style.display = 'none';
+                    loadData();
+                } else {
+                    showMessage('添加失败: ' + (result.error || '未知错误'), 'error');
+                }
+            } catch (error) {
+                showMessage('添加失败: ' + error.message, 'error');
+            }
+        }
+
+        // 确认从预览添加
+        async function confirmAddFromPreview() {
+            const preview = document.getElementById('aiPreview');
+            if (!preview.dataset.parsedItem) {
+                showMessage('没有可添加的数据', 'error');
+                return;
+            }
+            
+            const itemData = JSON.parse(preview.dataset.parsedItem);
+            const category = itemData.category || '';
+            
+            // 从itemData中移除category，因为API会单独处理
+            const item = { ...itemData };
+            delete item.category;
+            
+            try {
+                const response = await fetch('/api/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item, category })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('添加成功', 'success');
+                    document.getElementById('aiInput').value = '';
+                    preview.style.display = 'none';
+                    loadData();
+                } else {
+                    showMessage('添加失败: ' + (result.error || '未知错误'), 'error');
+                }
+            } catch (error) {
+                showMessage('添加失败: ' + error.message, 'error');
+            }
+        }
+
+        // 关闭预览
+        function closePreview() {
+            document.getElementById('aiPreview').style.display = 'none';
+        }
+
+        // 显示新增分类模态框
+        function showAddCategoryModal() {
+            document.getElementById('categoryModal').classList.add('active');
+            document.getElementById('categoryNameInput').value = '';
+        }
+
+        // 关闭分类模态框
+        function closeCategoryModal() {
+            document.getElementById('categoryModal').classList.remove('active');
+            document.getElementById('categoryForm').reset();
+        }
+
+        // 提交新增分类表单
+        document.getElementById('categoryForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const categoryName = document.getElementById('categoryNameInput').value.trim();
+            
+            if (!categoryName) {
+                showMessage('请输入分类名称', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/add-category', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category_name: categoryName })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    closeCategoryModal();
+                    loadData();
+                } else {
+                    showMessage('创建失败: ' + (result.error || '未知错误'), 'error');
+                }
+            } catch (error) {
+                showMessage('创建失败: ' + error.message, 'error');
+            }
+        });
+
+        // 支持回车键快速添加（Ctrl+Enter）
+        document.addEventListener('DOMContentLoaded', function() {
+            const aiInput = document.getElementById('aiInput');
+            if (aiInput) {
+                aiInput.addEventListener('keydown', function(e) {
+                    if (e.ctrlKey && e.key === 'Enter') {
+                        parseAndAdd();
+                    }
+                });
+            }
+        });
+
+
+        // 显示导入模态框
+        function showImportModal() {
+            document.getElementById('importModal').classList.add('active');
+            document.getElementById('importForm').reset();
+            document.getElementById('importValidation').style.display = 'none';
+            document.getElementById('importValidation').innerHTML = '';
+        }
+
+        // 关闭导入模态框
+        function closeImportModal() {
+            document.getElementById('importModal').classList.remove('active');
+            document.getElementById('importForm').reset();
+            document.getElementById('importValidation').style.display = 'none';
+            document.getElementById('importValidation').innerHTML = '';
+        }
+
+        // 验证导入文件格式
+        async function validateImportFile() {
+            const fileInput = document.getElementById('importFileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showMessage('请先选择文件', 'error');
+                return;
+            }
+
+            const validationDiv = document.getElementById('importValidation');
+            validationDiv.style.display = 'block';
+            validationDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;">验证中...</div>';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/validate', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                let html = '';
+                if (result.success && result.valid) {
+                    html += '<div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 6px; border: 1px solid #c3e6cb;">';
+                    html += '<strong>✓ 格式验证通过</strong><br>';
+                    html += `分类数量: ${result.category_count || 0}<br>`;
+                    html += `数据行: ${result.has_data ? '有' : '无'}<br>`;
+                    if (result.warnings && result.warnings.length > 0) {
+                        html += '<div style="margin-top: 10px; color: #856404;">';
+                        html += '<strong>提示：</strong><ul style="margin: 5px 0; padding-left: 20px;">';
+                        result.warnings.forEach(w => html += `<li>${escapeHtml(w)}</li>`);
+                        html += '</ul></div>';
+                    }
+                    html += '</div>';
+                } else {
+                    html += '<div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 6px; border: 1px solid #f5c6cb;">';
+                    html += '<strong>✗ 格式验证失败</strong><br>';
+                    if (result.errors && result.errors.length > 0) {
+                        html += '<ul style="margin: 10px 0; padding-left: 20px;">';
+                        result.errors.forEach(e => html += `<li>${escapeHtml(e)}</li>`);
+                        html += '</ul>';
+                    }
+                    if (result.warnings && result.warnings.length > 0) {
+                        html += '<div style="margin-top: 10px; color: #856404;">';
+                        html += '<strong>提示：</strong><ul style="margin: 5px 0; padding-left: 20px;">';
+                        result.warnings.forEach(w => html += `<li>${escapeHtml(w)}</li>`);
+                        html += '</ul></div>';
+                    }
+                    html += '</div>';
+                }
+                validationDiv.innerHTML = html;
+            } catch (error) {
+                validationDiv.innerHTML = '<div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 6px;">验证失败: ' + error.message + '</div>';
+            }
+        }
+
+        // 提交导入表单
+        document.getElementById('importForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('importFileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showMessage('请先选择文件', 'error');
+                return;
+            }
+
+            if (!confirm('确定要导入此文件吗？当前文件将被备份，新文件将覆盖当前数据。')) {
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/import', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`导入成功！已导入 ${result.category_count} 个分类，${result.item_count} 个项目。备份文件: ${result.backup_file}`, 'success');
+                    closeImportModal();
+                    loadData();
+                } else {
+                    let errorMsg = '导入失败: ' + (result.error || '未知错误');
+                    if (result.errors && result.errors.length > 0) {
+                        errorMsg += '\n' + result.errors.join('\n');
+                    }
+                    showMessage(errorMsg, 'error');
+                }
+            } catch (error) {
+                showMessage('导入失败: ' + error.message, 'error');
+            }
+        });
+
+        // 页面加载时自动加载数据
+        window.addEventListener('load', function() {
+            loadData();
+        });
+    </script>
+</body>
+</html>

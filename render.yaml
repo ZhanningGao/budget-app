@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: budget-app
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --config gunicorn_config.py wsgi:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHONUNBUFFERED
+        value: 1
+    healthCheckPath: /
+    disk:
+      name: budget-data
+      mountPath: /app/data
+      sizeGB: 1
+

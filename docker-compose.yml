@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  budget-app:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      # 挂载数据目录，确保数据持久化
+      - ./红玺台复式装修预算表.xlsx:/app/红玺台复式装修预算表.xlsx
+      - ./exports:/app/exports
+      - ./uploads:/app/uploads
+      - ./fonts:/app/fonts
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+

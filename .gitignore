@@ -1,0 +1,36 @@
+# 配置文件（包含API Key）
+.config.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 上传和导出目录
+uploads/
+exports/
+
+# 环境变量文件
+.env
+.env.local
+
+# 日志文件
+*.log
+logs/
+gunicorn.pid
+
