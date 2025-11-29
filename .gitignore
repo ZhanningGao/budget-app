@@ -34,3 +34,6 @@ exports/
 logs/
 gunicorn.pid
 
+# Excel文件（如果太大，可以选择不上传）
+# 红玺台复式装修预算表.xlsx
+
