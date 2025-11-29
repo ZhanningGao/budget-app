@@ -633,6 +633,23 @@ def update_totals_in_excel():
 def index():
     return render_template('index.html')
 
+@app.route('/api/verify-password', methods=['POST'])
+def verify_password():
+    """验证访问密码"""
+    try:
+        data = request.get_json()
+        password = data.get('password', '')
+        
+        # 从环境变量获取密码，如果没有设置则使用默认密码
+        correct_password = os.getenv('APP_PASSWORD', '902124')
+        
+        if password == correct_password:
+            return jsonify({'success': True, 'message': '验证成功'})
+        else:
+            return jsonify({'success': False, 'error': '密码错误'}), 401
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/load', methods=['GET'])
 def load_data():
     """加载Excel文件数据"""

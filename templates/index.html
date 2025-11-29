@@ -6,6 +6,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>装修预算表管理系统</title>
+    <!-- Chart.js for pie charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Chart.js datalabels plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -385,6 +389,162 @@
 
         .modal.active {
             display: flex;
+        }
+
+        /* 移动端详情弹窗样式 */
+        .mobile-detail-modal .modal-content {
+            max-width: 95%;
+            width: 95%;
+            max-height: 90vh;
+            padding: 0;
+            border-radius: 12px;
+        }
+
+        .mobile-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .mobile-detail-header h2 {
+            font-size: 15px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .mobile-detail-body {
+            padding: 12px 16px;
+            max-height: calc(90vh - 120px);
+            overflow-y: auto;
+            font-size: 13px;
+        }
+
+        .mobile-detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .mobile-detail-item:last-child {
+            border-bottom: none;
+        }
+
+        .mobile-detail-label {
+            color: #6c757d;
+            font-size: 12px;
+            min-width: 80px;
+        }
+
+        .mobile-detail-value {
+            color: #212529;
+            font-size: 13px;
+            font-weight: 500;
+            text-align: right;
+            flex: 1;
+        }
+
+        .mobile-detail-actions {
+            display: flex;
+            padding: 12px 16px;
+            border-top: 1px solid #e9ecef;
+            gap: 8px;
+        }
+
+        .mobile-detail-actions .btn {
+            min-height: 40px;
+            font-size: 14px;
+        }
+
+        /* 移动端隐藏详情弹窗，桌面端显示 */
+        @media (min-width: 769px) {
+            .mobile-detail-modal {
+                display: none !important;
+            }
+        }
+
+        /* 饼图样式 */
+        #budgetChart, #actualChart {
+            max-height: 300px;
+        }
+
+        #budgetLegend, #actualLegend, #categoryBudgetLegend, #categoryActualLegend {
+            font-size: 12px;
+        }
+
+        #categoryChartModal .modal-content {
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        #categoryBudgetChart, #categoryActualChart {
+            max-height: 250px;
+        }
+
+        @media (max-width: 768px) {
+            #categoryChartModal .modal-content {
+                width: 95%;
+                max-width: 95%;
+                padding: 10px;
+            }
+            
+            #categoryBudgetChart, #categoryActualChart {
+                max-height: 200px;
+            }
+            
+            #categoryBudgetLegend, #categoryActualLegend {
+                font-size: 10px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            #budgetChart, #actualChart {
+                max-height: 200px;
+            }
+            
+            #budgetLegend, #actualLegend {
+                font-size: 11px;
+            }
+            
+            /* 移动端图例和饼图垂直排列 */
+            #budgetChart, #actualChart {
+                max-width: 100%;
+            }
+        }
+
+        /* 移动端编辑弹窗样式优化 */
+        @media (max-width: 768px) {
+            #itemModal .modal-content {
+                max-height: 95vh;
+                padding: 15px;
+            }
+            
+            #itemModal .modal-header h2 {
+                font-size: 16px;
+            }
+            
+            #itemModal .form-group label {
+                font-size: 13px;
+            }
+            
+            #itemModal input,
+            #itemModal select,
+            #itemModal textarea {
+                font-size: 14px;
+                padding: 8px;
+            }
+            
+            #itemModal .modal-actions {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            #itemModal .modal-actions .btn {
+                width: 100%;
+                min-height: 44px;
+            }
         }
 
         .modal-content {
@@ -790,7 +950,26 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- 密码验证模态框 -->
+    <div id="passwordModal" class="modal" style="display: flex; z-index: 3000;">
+        <div class="modal-content" style="max-width: 400px; width: 90%;">
+            <div class="modal-header">
+                <h2>🔒 请输入访问密码</h2>
+            </div>
+            <form id="passwordForm" onsubmit="return verifyPassword(event)">
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="passwordInput" placeholder="请输入访问密码" required autofocus>
+                    <div id="passwordError" style="color: #dc3545; font-size: 12px; margin-top: 5px; display: none;"></div>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">验证</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="container" id="mainContainer" style="display: none;">
         <div class="header">
             <h1>🏠 装修预算表管理系统</h1>
             <p>便捷管理您的装修项目</p>
@@ -894,6 +1073,59 @@
         </div>
     </div>
 
+    <!-- 分类项目饼图弹窗 -->
+    <div id="categoryChartModal" class="modal">
+        <div class="modal-content" style="max-width: 90%; width: 90%; max-height: 90vh;">
+            <div class="modal-header">
+                <h2 id="categoryChartTitle">分类项目占比</h2>
+                <button type="button" class="close-btn" onclick="closeCategoryChartModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <div style="display: flex; flex-wrap: wrap; gap: 30px; justify-content: center;">
+                    <div style="flex: 1; min-width: 300px; max-width: 400px;">
+                        <div style="text-align: center; font-weight: 600; margin-bottom: 15px; font-size: 16px;">2nd预算项目占比</div>
+                        <div style="display: flex; gap: 20px;">
+                            <div style="flex: 1; max-width: 200px;">
+                                <canvas id="categoryBudgetChart"></canvas>
+                            </div>
+                            <div id="categoryBudgetLegend" style="flex: 1; display: flex; flex-direction: column; justify-content: center;"></div>
+                        </div>
+                    </div>
+                    <div style="flex: 1; min-width: 300px; max-width: 400px;">
+                        <div style="text-align: center; font-weight: 600; margin-bottom: 15px; font-size: 16px;">实际花费项目占比</div>
+                        <div style="display: flex; gap: 20px;">
+                            <div style="flex: 1; max-width: 200px;">
+                                <canvas id="categoryActualChart"></canvas>
+                            </div>
+                            <div id="categoryActualLegend" style="flex: 1; display: flex; flex-direction: column; justify-content: center;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions" style="padding: 15px; border-top: 1px solid #e9ecef;">
+                <button type="button" class="btn btn-secondary" onclick="closeCategoryChartModal()" style="width: 100%;">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 移动端详情弹窗 -->
+    <div id="itemDetailModal" class="modal mobile-detail-modal">
+        <div class="modal-content mobile-detail-content">
+            <div class="modal-header mobile-detail-header">
+                <h2 id="detailModalTitle" style="font-size: 16px; margin: 0;">项目详情</h2>
+                <button type="button" class="close-btn" onclick="closeDetailModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+            </div>
+            <div id="itemDetailContent" class="mobile-detail-body">
+                <!-- 详情内容将通过JavaScript填充 -->
+            </div>
+            <div class="mobile-detail-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeDetailModal()" style="flex: 1; margin-right: 8px;">取消</button>
+                <button type="button" class="btn btn-danger" onclick="deleteFromDetail()" style="flex: 1; margin-right: 8px;">删除</button>
+                <button type="button" class="btn btn-primary" onclick="editFromDetail()" style="flex: 1;">编辑</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 添加/编辑模态框 -->
     <div id="itemModal" class="modal">
         <div class="modal-content">
@@ -950,6 +1182,7 @@
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                    <button type="button" class="btn btn-danger" id="deleteItemBtn" onclick="deleteCurrentItem()" style="display: none;">删除</button>
                     <button type="submit" class="btn btn-primary">保存</button>
                 </div>
             </form>
@@ -957,9 +1190,522 @@
     </div>
 
     <script>
+        // 密码验证相关
+        const PASSWORD_STORAGE_KEY = 'budget_app_verified';
+        const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24小时
+
+        // 检查是否已通过验证
+        function checkPasswordVerification() {
+            const verified = localStorage.getItem(PASSWORD_STORAGE_KEY);
+            if (verified) {
+                const timestamp = parseInt(verified);
+                const now = Date.now();
+                // 检查是否在有效期内（24小时）
+                if (now - timestamp < SESSION_TIMEOUT) {
+                    // 验证通过，显示主界面
+                    document.getElementById('passwordModal').style.display = 'none';
+                    document.getElementById('mainContainer').style.display = 'block';
+                    return true;
+                } else {
+                    // 超时，清除验证
+                    localStorage.removeItem(PASSWORD_STORAGE_KEY);
+                }
+            }
+            // 未验证，显示密码输入框
+            document.getElementById('passwordModal').style.display = 'flex';
+            document.getElementById('mainContainer').style.display = 'none';
+            return false;
+        }
+
+        // 验证密码
+        async function verifyPassword(event) {
+            event.preventDefault();
+            const passwordInput = document.getElementById('passwordInput');
+            const password = passwordInput.value;
+            const errorDiv = document.getElementById('passwordError');
+
+            // 清空错误信息
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+
+            try {
+                // 调用后端API验证密码
+                const response = await fetch('/api/verify-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: password })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 验证成功，保存验证状态
+                    localStorage.setItem(PASSWORD_STORAGE_KEY, Date.now().toString());
+                    // 隐藏密码框，显示主界面
+                    document.getElementById('passwordModal').style.display = 'none';
+                    document.getElementById('mainContainer').style.display = 'block';
+                    // 加载数据
+                    loadData();
+                } else {
+                    // 验证失败
+                    errorDiv.textContent = result.error || '密码错误，请重试';
+                    errorDiv.style.display = 'block';
+                    passwordInput.value = '';
+                    passwordInput.focus();
+                }
+            } catch (error) {
+                errorDiv.textContent = '验证失败: ' + error.message;
+                errorDiv.style.display = 'block';
+                passwordInput.value = '';
+                passwordInput.focus();
+            }
+        }
+
+        // 页面加载时检查验证状态
+        (function() {
+            if (!checkPasswordVerification()) {
+                // 如果未验证，聚焦到密码输入框
+                setTimeout(() => {
+                    const passwordInput = document.getElementById('passwordInput');
+                    if (passwordInput) {
+                        passwordInput.focus();
+                    }
+                }, 100);
+            } else {
+                // 已验证，加载数据
+                loadData();
+            }
+        })();
+
         let categories = [];
         let items = [];
         let editingItemId = null;
+        let budgetChart = null;
+        let actualChart = null;
+        let categoryBudgetChart = null;
+        let categoryActualChart = null;
+
+        // 渲染饼图
+        function renderPieCharts(categoryBudget, categoryActual) {
+            // 准备数据
+            const budgetLabels = [];
+            const budgetData = [];
+            const actualLabels = [];
+            const actualData = [];
+            
+            // 按金额排序（从大到小）
+            const budgetEntries = Object.entries(categoryBudget)
+                .filter(([cat, val]) => val > 0)
+                .sort((a, b) => b[1] - a[1]);
+            const actualEntries = Object.entries(categoryActual)
+                .filter(([cat, val]) => val > 0)
+                .sort((a, b) => b[1] - a[1]);
+            
+            budgetEntries.forEach(([cat, val]) => {
+                budgetLabels.push(cat);
+                budgetData.push(val);
+            });
+            
+            actualEntries.forEach(([cat, val]) => {
+                actualLabels.push(cat);
+                actualData.push(val);
+            });
+            
+            // 生成颜色
+            const colors = [
+                '#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe',
+                '#43e97b', '#fa709a', '#fee140', '#30cfd0', '#a8edea',
+                '#fed6e3', '#a8caba', '#5d4e75', '#ffecd2', '#fcb69f'
+            ];
+            
+            const budgetColors = budgetLabels.map((_, i) => colors[i % colors.length]);
+            const actualColors = actualLabels.map((_, i) => colors[i % colors.length]);
+            
+            // 销毁旧图表
+            if (budgetChart) {
+                budgetChart.destroy();
+            }
+            if (actualChart) {
+                actualChart.destroy();
+            }
+            
+            // 创建预算饼图
+            const budgetCtx = document.getElementById('budgetChart');
+            if (budgetCtx && budgetLabels.length > 0) {
+                budgetChart = new Chart(budgetCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: budgetLabels,
+                        datasets: [{
+                            data: budgetData,
+                            backgroundColor: budgetColors,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                align: 'center',
+                                labels: {
+                                    padding: 15,
+                                    font: {
+                                        size: 12
+                                    },
+                                    usePointStyle: true,
+                                    pointStyle: 'circle',
+                                    generateLabels: function(chart) {
+                                        const data = chart.data;
+                                        if (data.labels.length && data.datasets.length) {
+                                            return data.labels.map((label, i) => {
+                                                const dataset = data.datasets[0];
+                                                const value = dataset.data[i];
+                                                const total = dataset.data.reduce((a, b) => a + b, 0);
+                                                const percentage = ((value / total) * 100).toFixed(1);
+                                                return {
+                                                    text: `${label} (${percentage}%)`,
+                                                    fillStyle: dataset.backgroundColor[i],
+                                                    strokeStyle: dataset.borderColor,
+                                                    lineWidth: dataset.borderWidth,
+                                                    hidden: false,
+                                                    index: i
+                                                };
+                                            });
+                                        }
+                                        return [];
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.parsed || 0;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return `${label}: ${formatNumber(value)} 元 (${percentage}%)`;
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                color: '#fff',
+                                font: {
+                                    size: 11,
+                                    weight: 'bold'
+                                },
+                                formatter: function(value, context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return percentage > 5 ? percentage + '%' : '';
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // 创建实际花费饼图
+            const actualCtx = document.getElementById('actualChart');
+            if (actualCtx && actualLabels.length > 0) {
+                actualChart = new Chart(actualCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: actualLabels,
+                        datasets: [{
+                            data: actualData,
+                            backgroundColor: actualColors,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                align: 'center',
+                                labels: {
+                                    padding: 15,
+                                    font: {
+                                        size: 12
+                                    },
+                                    usePointStyle: true,
+                                    pointStyle: 'circle',
+                                    generateLabels: function(chart) {
+                                        const data = chart.data;
+                                        if (data.labels.length && data.datasets.length) {
+                                            return data.labels.map((label, i) => {
+                                                const dataset = data.datasets[0];
+                                                const value = dataset.data[i];
+                                                const total = dataset.data.reduce((a, b) => a + b, 0);
+                                                const percentage = ((value / total) * 100).toFixed(1);
+                                                return {
+                                                    text: `${label} (${percentage}%)`,
+                                                    fillStyle: dataset.backgroundColor[i],
+                                                    strokeStyle: dataset.borderColor,
+                                                    lineWidth: dataset.borderWidth,
+                                                    hidden: false,
+                                                    index: i
+                                                };
+                                            });
+                                        }
+                                        return [];
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.parsed || 0;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return `${label}: ${formatNumber(value)} 元 (${percentage}%)`;
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                color: '#fff',
+                                font: {
+                                    size: 11,
+                                    weight: 'bold'
+                                },
+                                formatter: function(value, context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return percentage > 5 ? percentage + '%' : '';
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // 显示分类项目饼图
+        function showCategoryChart(categoryName) {
+            // 获取该分类下的所有项目
+            const categoryItems = items.filter(item => (item.category || '未分类') === categoryName);
+            
+            if (categoryItems.length === 0) {
+                showMessage('该分类下暂无项目', 'error');
+                return;
+            }
+
+            // 计算各项目的预算和实际花费
+            const itemBudget = {};
+            const itemActual = {};
+            
+            categoryItems.forEach(item => {
+                const itemName = item['项目'] || '未命名项目';
+                const budget = parseFloat(item['2nd预算费用']) || 0;
+                const actual = parseFloat(item['最终实际花费']) || 0;
+                
+                if (!itemBudget[itemName]) {
+                    itemBudget[itemName] = 0;
+                    itemActual[itemName] = 0;
+                }
+                itemBudget[itemName] += budget;
+                itemActual[itemName] += actual;
+            });
+
+            // 准备数据
+            const budgetLabels = [];
+            const budgetData = [];
+            const actualLabels = [];
+            const actualData = [];
+            
+            // 按金额排序（从大到小）
+            const budgetEntries = Object.entries(itemBudget)
+                .filter(([name, val]) => val > 0)
+                .sort((a, b) => b[1] - a[1]);
+            const actualEntries = Object.entries(itemActual)
+                .filter(([name, val]) => val > 0)
+                .sort((a, b) => b[1] - a[1]);
+            
+            budgetEntries.forEach(([name, val]) => {
+                budgetLabels.push(name);
+                budgetData.push(val);
+            });
+            
+            actualEntries.forEach(([name, val]) => {
+                actualLabels.push(name);
+                actualData.push(val);
+            });
+
+            // 生成颜色
+            const colors = [
+                '#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe',
+                '#43e97b', '#fa709a', '#fee140', '#30cfd0', '#a8edea',
+                '#fed6e3', '#a8caba', '#5d4e75', '#ffecd2', '#fcb69f'
+            ];
+            
+            const budgetColors = budgetLabels.map((_, i) => colors[i % colors.length]);
+            const actualColors = actualLabels.map((_, i) => colors[i % colors.length]);
+
+            // 更新标题
+            document.getElementById('categoryChartTitle').textContent = `${categoryName} - 项目占比`;
+
+            // 销毁旧图表
+            if (categoryBudgetChart) {
+                categoryBudgetChart.destroy();
+            }
+            if (categoryActualChart) {
+                categoryActualChart.destroy();
+            }
+
+            // 创建预算饼图
+            const budgetCtx = document.getElementById('categoryBudgetChart');
+            const budgetLegendDiv = document.getElementById('categoryBudgetLegend');
+            if (budgetCtx && budgetLabels.length > 0) {
+                categoryBudgetChart = new Chart(budgetCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: budgetLabels,
+                        datasets: [{
+                            data: budgetData,
+                            backgroundColor: budgetColors,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.parsed || 0;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return `${label}: ${formatNumber(value)} 元 (${percentage}%)`;
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                color: '#fff',
+                                font: {
+                                    size: 10,
+                                    weight: 'bold'
+                                },
+                                formatter: function(value, context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return percentage > 5 ? percentage + '%' : '';
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // 创建自定义图例
+                if (budgetLegendDiv) {
+                    let legendHtml = '';
+                    budgetLabels.forEach((label, i) => {
+                        const value = budgetData[i];
+                        const total = budgetData.reduce((a, b) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        legendHtml += `<div style="display: flex; align-items: center; margin-bottom: 6px; padding: 3px;">`;
+                        legendHtml += `<div style="width: 14px; height: 14px; background: ${budgetColors[i]}; border-radius: 50%; margin-right: 8px; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>`;
+                        legendHtml += `<div style="flex: 1; font-size: 11px;">`;
+                        legendHtml += `<div style="font-weight: 600; color: #333; line-height: 1.3;">${escapeHtml(label)}</div>`;
+                        legendHtml += `<div style="font-size: 10px; color: #666;">${formatNumber(value)} 元 (${percentage}%)</div>`;
+                        legendHtml += `</div>`;
+                        legendHtml += `</div>`;
+                    });
+                    budgetLegendDiv.innerHTML = legendHtml;
+                }
+            }
+
+            // 创建实际花费饼图
+            const actualCtx = document.getElementById('categoryActualChart');
+            const actualLegendDiv = document.getElementById('categoryActualLegend');
+            if (actualCtx && actualLabels.length > 0) {
+                categoryActualChart = new Chart(actualCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: actualLabels,
+                        datasets: [{
+                            data: actualData,
+                            backgroundColor: actualColors,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.parsed || 0;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return `${label}: ${formatNumber(value)} 元 (${percentage}%)`;
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                color: '#fff',
+                                font: {
+                                    size: 10,
+                                    weight: 'bold'
+                                },
+                                formatter: function(value, context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return percentage > 5 ? percentage + '%' : '';
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // 创建自定义图例
+                if (actualLegendDiv) {
+                    let legendHtml = '';
+                    actualLabels.forEach((label, i) => {
+                        const value = actualData[i];
+                        const total = actualData.reduce((a, b) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        legendHtml += `<div style="display: flex; align-items: center; margin-bottom: 6px; padding: 3px;">`;
+                        legendHtml += `<div style="width: 14px; height: 14px; background: ${actualColors[i]}; border-radius: 50%; margin-right: 8px; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>`;
+                        legendHtml += `<div style="flex: 1; font-size: 11px;">`;
+                        legendHtml += `<div style="font-weight: 600; color: #333; line-height: 1.3;">${escapeHtml(label)}</div>`;
+                        legendHtml += `<div style="font-size: 10px; color: #666;">${formatNumber(value)} 元 (${percentage}%)</div>`;
+                        legendHtml += `</div>`;
+                        legendHtml += `</div>`;
+                    });
+                    actualLegendDiv.innerHTML = legendHtml;
+                }
+            }
+
+            // 显示模态框
+            document.getElementById('categoryChartModal').classList.add('active');
+        }
+
+        // 关闭分类项目饼图弹窗
+        function closeCategoryChartModal() {
+            document.getElementById('categoryChartModal').classList.remove('active');
+        }
 
         // 字段显示名称映射
         const fieldLabels = {
@@ -1033,21 +1779,21 @@
                 // 即使没有项目也显示分类（允许添加项目）
 
                 html += `<div class="category-section" data-category="${escapeHtml(category)}">`;
-                html += `<div class="category-header">`;
+                html += `<div class="category-header" style="cursor: pointer;" onclick="showCategoryChart('${escapeHtml(category)}')" title="点击查看分类项目占比">`;
                 html += `<span>${escapeHtml(category)}</span>`;
-                html += `<span style="font-size: 14px; opacity: 0.9;">${categoryItems.length} 项</span>`;
+                html += `<span style="font-size: 14px; opacity: 0.9;">${categoryItems.length} 项 📊</span>`;
                 html += `</div>`;
                 html += `<div class="table-wrapper">`;
                 html += `<table><thead><tr>`;
                 html += `<th class="checkbox-cell"><input type="checkbox" class="category-select-all" onchange="toggleCategorySelectAll('${escapeHtml(category)}', this.checked)"></th>`;
                 html += `<th>序号</th>`;
                 html += `<th>项目名称</th>`;
-                html += `<th>单位</th>`;
-                html += `<th>数量</th>`;
                 html += `<th class="number-cell">1st预算</th>`;
                 html += `<th class="number-cell">2nd预算</th>`;
                 html += `<th class="number-cell">实际花费</th>`;
                 html += `<th class="number-cell">差价</th>`;
+                html += `<th>单位</th>`;
+                html += `<th>数量</th>`;
                 html += `<th>备注</th>`;
                 html += `<th class="action-cell desktop-only">操作</th>`;
                 html += `</tr></thead><tbody>`;
@@ -1073,12 +1819,12 @@
                         html += `<td class="checkbox-cell"><input type="checkbox" class="row-checkbox" onchange="updateDeleteButton()"></td>`;
                         html += `<td>${item['序号'] || ''}</td>`;
                         html += `<td><strong>${escapeHtml(item['项目'] || '')}</strong></td>`;
-                        html += `<td>${escapeHtml(item['单位'] || '')}</td>`;
-                        html += `<td>${escapeHtml(item['预算数量'] || '')}</td>`;
                         html += `<td class="number-cell">${formatNumber(item['1st预算费用'])}</td>`;
                         html += `<td class="number-cell">${formatNumber(item['2nd预算费用'])}</td>`;
                         html += `<td class="number-cell"><strong>${formatNumber(item['最终实际花费'])}</strong></td>`;
                         html += `<td class="number-cell">${formatNumber(item['差价'])}</td>`;
+                        html += `<td>${escapeHtml(item['单位'] || '')}</td>`;
+                        html += `<td>${escapeHtml(item['预算数量'] || '')}</td>`;
                         html += `<td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item['备注'] || '')}">${escapeHtml(item['备注'] || '')}</td>`;
                         html += `<td class="action-cell desktop-only"><button class="btn btn-primary btn-small" onclick="event.stopPropagation(); editItem(${item.id})">编辑</button></td>`;
                         html += `</tr>`;
@@ -1088,9 +1834,9 @@
                 html += `</tbody></table>`;
                 html += `<div class="summary">`;
                 html += `<span>本分类合计：`;
-                html += `2nd预算 <strong>${formatNumber(categoryTotal2nd.toFixed(2))}</strong> 元 | `;
-                html += `实际花费 <strong>${formatNumber(categoryTotalActual.toFixed(2))}</strong> 元 | `;
-                html += `差价 <strong>${formatNumber(categoryTotalDiff.toFixed(2))}</strong> 元`;
+                html += `2nd预算 <strong>${formatNumber(categoryTotal2nd)}</strong> 元 | `;
+                html += `实际花费 <strong>${formatNumber(categoryTotalActual)}</strong> 元 | `;
+                html += `差价 <strong>${formatNumber(categoryTotalDiff)}</strong> 元`;
                 html += `</span>`;
                 html += `</div>`;
                 html += `</div></div>`;
@@ -1099,24 +1845,26 @@
             // 渲染未分类项目
             const uncategorized = itemsByCategory['未分类'] || [];
             if (uncategorized.length > 0) {
-                html += `<div class="category-section"><div class="category-header"><span>未分类</span><span style="font-size: 14px; opacity: 0.9;">${uncategorized.length} 项</span></div>`;
+                html += `<div class="category-section"><div class="category-header" style="cursor: pointer;" onclick="showCategoryChart('未分类')" title="点击查看分类项目占比"><span>未分类</span><span style="font-size: 14px; opacity: 0.9;">${uncategorized.length} 项 📊</span></div>`;
                 html += `<div class="table-wrapper"><table><thead><tr>`;
                 html += `<th class="checkbox-cell"><input type="checkbox" class="category-select-all" onchange="toggleCategorySelectAll('未分类', this.checked)"></th>`;
                 html += `<th class="checkbox-cell"><input type="checkbox" class="category-select-all" onchange="toggleCategorySelectAll('未分类', this.checked)"></th>`;
-                html += `<th>序号</th><th>项目名称</th><th>单位</th><th>数量</th>`;
-                html += `<th class="number-cell">1st预算</th><th class="number-cell">2nd预算</th><th class="number-cell">实际花费</th><th class="number-cell">差价</th><th>备注</th><th class="action-cell desktop-only">操作</th>`;
+                html += `<th>序号</th><th>项目名称</th>`;
+                html += `<th class="number-cell">1st预算</th><th class="number-cell">2nd预算</th><th class="number-cell">实际花费</th><th class="number-cell">差价</th>`;
+                html += `<th>单位</th><th>数量</th>`;
+                html += `<th>备注</th><th class="action-cell desktop-only">操作</th>`;
                 html += `</tr></thead><tbody>`;
                 uncategorized.forEach(item => {
                     html += `<tr data-item-id="${item.id}" data-category="未分类">`;
                     html += `<td class="checkbox-cell"><input type="checkbox" class="row-checkbox" onchange="updateDeleteButton()"></td>`;
                     html += `<td>${item['序号'] || ''}</td>`;
                     html += `<td><strong>${escapeHtml(item['项目'] || '')}</strong></td>`;
-                    html += `<td>${escapeHtml(item['单位'] || '')}</td>`;
-                    html += `<td>${escapeHtml(item['预算数量'] || '')}</td>`;
                     html += `<td class="number-cell">${formatNumber(item['1st预算费用'])}</td>`;
                     html += `<td class="number-cell">${formatNumber(item['2nd预算费用'])}</td>`;
                     html += `<td class="number-cell"><strong>${formatNumber(item['最终实际花费'])}</strong></td>`;
                     html += `<td class="number-cell">${formatNumber(item['差价'])}</td>`;
+                    html += `<td>${escapeHtml(item['单位'] || '')}</td>`;
+                    html += `<td>${escapeHtml(item['预算数量'] || '')}</td>`;
                     html += `<td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item['备注'] || '')}">${escapeHtml(item['备注'] || '')}</td>`;
                     html += `<td class="action-cell desktop-only"><button class="btn btn-primary btn-small" onclick="event.stopPropagation(); editItem(${item.id})">编辑</button></td>`;
                     html += `</tr>`;
@@ -1139,7 +1887,24 @@
                 grandTotalDiff += valDiff;
             });
 
-            // 在开头添加总合计显示
+            // 计算各分类的预算和实际花费
+            const categoryBudget = {};
+            const categoryActual = {};
+            
+            items.forEach(item => {
+                const cat = item.category || '未分类';
+                const budget = parseFloat(item['2nd预算费用']) || 0;
+                const actual = parseFloat(item['最终实际花费']) || 0;
+                
+                if (!categoryBudget[cat]) {
+                    categoryBudget[cat] = 0;
+                    categoryActual[cat] = 0;
+                }
+                categoryBudget[cat] += budget;
+                categoryActual[cat] += actual;
+            });
+
+            // 在开头添加总合计显示和饼图
             let totalHtml = '';
             totalHtml += `<div class="category-section" style="background: #f8f9fa; border: 2px solid #667eea; margin-bottom: 20px;">`;
             totalHtml += `<div class="category-header" style="background: #667eea; color: white; padding: 15px; font-size: 18px; font-weight: bold;">`;
@@ -1148,24 +1913,39 @@
             totalHtml += `<div class="summary" style="padding: 20px; font-size: 16px; text-align: center;">`;
             totalHtml += `<div style="font-weight: 600; margin-bottom: 10px;">总合计</div>`;
             totalHtml += `<div style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; align-items: center;">`;
-            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">2nd预算</div><strong style="color: #667eea; font-size: 20px;">${formatNumber(grandTotal2nd.toFixed(2))}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
-            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">实际花费</div><strong style="color: #28a745; font-size: 20px;">${formatNumber(grandTotalActual.toFixed(2))}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
-            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">差价</div><strong style="color: ${grandTotalDiff >= 0 ? '#28a745' : '#dc3545'}; font-size: 20px;">${formatNumber(grandTotalDiff.toFixed(2))}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
+            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">2nd预算</div><strong style="color: #667eea; font-size: 20px;">${formatNumber(grandTotal2nd)}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
+            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">实际花费</div><strong style="color: #28a745; font-size: 20px;">${formatNumber(grandTotalActual)}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
+            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">差价</div><strong style="color: ${grandTotalDiff >= 0 ? '#28a745' : '#dc3545'}; font-size: 20px;">${formatNumber(grandTotalDiff)}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
+            totalHtml += `</div>`;
+            totalHtml += `</div>`;
+            
+            // 添加饼图容器
+            totalHtml += `<div style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; padding: 20px; background: white;">`;
+            totalHtml += `<div style="flex: 1; min-width: 300px; max-width: 400px;">`;
+            totalHtml += `<div style="text-align: center; font-weight: 600; margin-bottom: 10px; font-size: 16px;">2nd预算分类占比</div>`;
+            totalHtml += `<canvas id="budgetChart" style="max-width: 100%; height: auto;"></canvas>`;
+            totalHtml += `</div>`;
+            totalHtml += `<div style="flex: 1; min-width: 300px; max-width: 400px;">`;
+            totalHtml += `<div style="text-align: center; font-weight: 600; margin-bottom: 10px; font-size: 16px;">实际花费分类占比</div>`;
+            totalHtml += `<canvas id="actualChart" style="max-width: 100%; height: auto;"></canvas>`;
             totalHtml += `</div>`;
             totalHtml += `</div>`;
             totalHtml += `</div>`;
 
             container.innerHTML = totalHtml + html;
             
+            // 渲染饼图
+            renderPieCharts(categoryBudget, categoryActual);
+            
             // 移动端：为表格行添加点击事件（整行可点击编辑）
             // 移动端已隐藏复选框，所以整行都可以点击
             document.querySelectorAll('tbody tr[data-item-id]').forEach(row => {
                 const itemId = row.dataset.itemId;
                 if (itemId) {
-                    // 移动端：整行可点击编辑
+                    // 移动端：整行可点击显示详情
                     if (window.innerWidth <= 768) {
                         row.addEventListener('click', function(e) {
-                            editItem(parseInt(itemId));
+                            showItemDetail(parseInt(itemId));
                         });
                         row.style.transition = 'background 0.2s';
                     } else {
@@ -1195,7 +1975,12 @@
             editingItemId = null;
             document.getElementById('modalTitle').textContent = '添加项目';
             document.getElementById('itemForm').reset();
+            // 隐藏删除按钮（添加模式）
+            document.getElementById('deleteItemBtn').style.display = 'none';
             document.getElementById('itemModal').classList.add('active');
+            if (window.innerWidth <= 768) {
+                document.getElementById('itemModal').style.display = 'flex';
+            }
         }
 
         // 编辑项目
@@ -1228,7 +2013,7 @@
             const diff = val2nd - valActual;
             const diffInput = document.getElementById('diffInput');
             if (diffInput) {
-                diffInput.value = diff.toFixed(2);
+                diffInput.value = Math.round(diff);
             }
         }
 
@@ -1237,6 +2022,151 @@
             document.getElementById('itemModal').classList.remove('active');
             document.getElementById('itemForm').reset();
             editingItemId = null;
+            document.getElementById('deleteItemBtn').style.display = 'none';
+            if (window.innerWidth <= 768) {
+                document.getElementById('itemModal').style.display = 'none';
+            }
+        }
+
+        // 删除当前编辑的项目
+        async function deleteCurrentItem() {
+            if (editingItemId === null) return;
+
+            const item = items.find(i => i.id === editingItemId);
+            const itemName = item ? item['项目'] : '该项目';
+
+            // 第一次确认
+            if (!confirm(`确定要删除"${itemName}"吗？`)) {
+                return;
+            }
+
+            // 第二次确认
+            if (!confirm(`请再次确认：确定要删除"${itemName}"吗？此操作不可恢复！`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_ids: [editingItemId] })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    closeModal();
+                    loadData();
+                } else {
+                    showMessage('删除失败: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        // 显示项目详情（移动端）
+        let currentDetailItemId = null;
+        function showItemDetail(itemId) {
+            const item = items.find(i => i.id === itemId);
+            if (!item) return;
+
+            currentDetailItemId = itemId;
+            const detailContent = document.getElementById('itemDetailContent');
+            const title = document.getElementById('detailModalTitle');
+
+            title.textContent = item['项目'] || '项目详情';
+
+            // 构建详情内容，字段顺序：项目名称、1st预算、2nd预算、实际花费、差价、单位、数量、备注
+            let html = '';
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">项目名称</span><span class="mobile-detail-value">${escapeHtml(item['项目'] || '-')}</span></div>`;
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">1st预算</span><span class="mobile-detail-value">${formatNumber(item['1st预算费用'])} 元</span></div>`;
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">2nd预算</span><span class="mobile-detail-value">${formatNumber(item['2nd预算费用'])} 元</span></div>`;
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">实际花费</span><span class="mobile-detail-value">${formatNumber(item['最终实际花费'])} 元</span></div>`;
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">差价</span><span class="mobile-detail-value" style="color: ${parseFloat(item['差价'] || 0) >= 0 ? '#28a745' : '#dc3545'};">${formatNumber(item['差价'])} 元</span></div>`;
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">单位</span><span class="mobile-detail-value">${escapeHtml(item['单位'] || '-')}</span></div>`;
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">数量</span><span class="mobile-detail-value">${escapeHtml(item['预算数量'] || '-')}</span></div>`;
+            if (item['备注']) {
+                html += `<div class="mobile-detail-item"><span class="mobile-detail-label">备注</span><span class="mobile-detail-value" style="text-align: left; white-space: normal; word-break: break-word;">${escapeHtml(item['备注'])}</span></div>`;
+            }
+
+            detailContent.innerHTML = html;
+            document.getElementById('itemDetailModal').classList.add('active');
+            
+            // 添加浏览器历史记录，支持后退键关闭（仅移动端）
+            if (window.innerWidth <= 768) {
+                window.history.pushState({ detailView: true }, '', window.location.href);
+            }
+        }
+
+        // 关闭详情弹窗
+        function closeDetailModal() {
+            document.getElementById('itemDetailModal').classList.remove('active');
+            currentDetailItemId = null;
+            // 从浏览器历史记录中移除详情界面状态
+            if (window.history.state && window.history.state.detailView) {
+                window.history.back();
+            }
+        }
+
+        // 监听浏览器后退键
+        window.addEventListener('popstate', function(event) {
+            // 如果当前显示详情界面，关闭它
+            const detailModal = document.getElementById('itemDetailModal');
+            if (detailModal && detailModal.classList.contains('active')) {
+                detailModal.classList.remove('active');
+                currentDetailItemId = null;
+            }
+        });
+
+        // 从详情弹窗编辑（保存按钮）
+        function editFromDetail() {
+            if (currentDetailItemId !== null) {
+                closeDetailModal();
+                // 打开编辑表单
+                editItem(currentDetailItemId);
+                // 移动端显示编辑弹窗
+                if (window.innerWidth <= 768) {
+                    document.getElementById('itemModal').style.display = 'flex';
+                }
+            }
+        }
+
+        // 从详情弹窗删除
+        async function deleteFromDetail() {
+            if (currentDetailItemId === null) return;
+
+            const item = items.find(i => i.id === currentDetailItemId);
+            const itemName = item ? item['项目'] : '该项目';
+
+            // 第一次确认
+            if (!confirm(`确定要删除"${itemName}"吗？`)) {
+                return;
+            }
+
+            // 第二次确认
+            if (!confirm(`请再次确认：确定要删除"${itemName}"吗？此操作不可恢复！`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_ids: [currentDetailItemId] })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    closeDetailModal();
+                    loadData();
+                } else {
+                    showMessage('删除失败: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('删除失败: ' + error.message, 'error');
+            }
         }
 
         // 提交表单
@@ -1257,7 +2187,7 @@
                 '1st预算费用': formData.get('1st预算费用'),
                 '最终实际花费': formData.get('最终实际花费'),
                 '2nd预算费用': formData.get('2nd预算费用'),
-                '差价': diff.toFixed(2),
+                '差价': Math.round(diff),
                 '备注': formData.get('备注')
             };
 
@@ -1274,6 +2204,9 @@
                     if (result.success) {
                         showMessage(result.message, 'success');
                         closeModal();
+                        if (window.innerWidth <= 768) {
+                            document.getElementById('itemModal').style.display = 'none';
+                        }
                         loadData();
                     } else {
                         showMessage('操作失败: ' + result.error, 'error');
@@ -1289,6 +2222,9 @@
                     if (result.success) {
                         showMessage(result.message, 'success');
                         closeModal();
+                        if (window.innerWidth <= 768) {
+                            document.getElementById('itemModal').style.display = 'none';
+                        }
                         loadData();
                     } else {
                         showMessage('操作失败: ' + result.error, 'error');
@@ -1466,7 +2402,8 @@
             if (!value || value === '' || value === 'nan') return '-';
             const num = parseFloat(value);
             if (isNaN(num)) return value;
-            return num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            // 显示为整数，不带小数点
+            return Math.round(num).toLocaleString('zh-CN');
         }
 
         // AI解析预览
@@ -1760,10 +2697,9 @@
             }
         });
 
-        // 页面加载时自动加载数据
-        window.addEventListener('load', function() {
-            loadData();
-        });
+        // 页面加载时自动加载数据（仅在已验证时）
+        // 密码验证通过后会自动调用loadData()
     </script>
 </body>
 </html>
+
