@@ -53,6 +53,20 @@ resource (qcs::tcb:ap-shanghai:uin/xxx:env/*) has no permission
    - 或直接找到 **Secrets**（旧版本）
 4. 如果仍然找不到，联系仓库所有者
 
+### 问题：命令参数错误 `unknown option '--dockerfilePath'`
+
+**错误信息**：
+```
+error: unknown option '--dockerfilePath'
+```
+
+**原因**：CloudBase CLI 2.x 版本不支持 `--dockerfilePath` 参数
+
+**解决方法**：
+- CloudBase CLI 会自动检测项目根目录下的 `Dockerfile`
+- 移除工作流中的 `--dockerfilePath` 参数
+- 确保 `Dockerfile` 文件在项目根目录
+
 ### 问题：部署失败，查看日志
 
 1. 进入 GitHub 仓库的 **Actions** 页面

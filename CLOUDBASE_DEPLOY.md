@@ -86,17 +86,29 @@ tcb login
 在项目根目录下执行：
 
 ```bash
+tcb cloudrun deploy --envId <环境ID> --serviceName <服务名称>
+```
+
+或者交互式部署：
+
+```bash
 tcb cloudrun deploy
 ```
 
 按照提示输入：
-- 环境名称（如果还没有，会自动创建）
+- 环境ID（如果还没有，会自动创建）
 - 服务名称（例如：budget-manager）
 
 CLI 会自动：
-1. 构建 Docker 镜像
-2. 上传到腾讯云容器镜像服务
-3. 部署到云托管
+1. 检测 Dockerfile（项目根目录下的 Dockerfile）
+2. 构建 Docker 镜像
+3. 上传到腾讯云容器镜像服务
+4. 部署到云托管
+
+**注意**：
+- CloudBase CLI 会自动检测项目根目录下的 `Dockerfile`
+- 不需要指定 `--dockerfilePath` 参数
+- 会自动忽略 `.gitignore` 中列出的文件
 
 ### 4. 配置环境变量
 

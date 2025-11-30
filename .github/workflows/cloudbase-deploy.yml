@@ -35,8 +35,6 @@ jobs:
         run: |
           tcb cloudrun deploy \
             --envId ${{ secrets.TCB_ENV_ID }} \
-            --serviceName ${{ secrets.TCB_SERVICE_NAME || 'budget-manager' }} \
-            --dockerfilePath ./Dockerfile \
-            --ignore .git,.github,venv,__pycache__,*.pyc,exports,uploads,backups,logs
+            --serviceName ${{ secrets.TCB_SERVICE_NAME || 'budget-manager' }}
         continue-on-error: false
 
