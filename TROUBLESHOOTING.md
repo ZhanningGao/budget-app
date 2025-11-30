@@ -67,6 +67,21 @@ error: unknown option '--dockerfilePath'
 - 移除工作流中的 `--dockerfilePath` 参数
 - 确保 `Dockerfile` 文件在项目根目录
 
+### 问题：部署确认中断 `Process completed with exit code 130`
+
+**错误信息**：
+```
+? About to start deployment, confirm to continue? (Y/n) 
+Error: Process completed with exit code 130.
+```
+
+**原因**：CloudBase CLI 在非交互式环境（GitHub Actions）中等待用户确认，无法输入导致进程中断
+
+**解决方法**：
+- 使用 `echo "y" |` 管道自动输入确认
+- 或使用 `yes |` 命令自动确认所有提示
+- 工作流已更新为自动确认模式
+
 ### 问题：部署失败，查看日志
 
 1. 进入 GitHub 仓库的 **Actions** 页面

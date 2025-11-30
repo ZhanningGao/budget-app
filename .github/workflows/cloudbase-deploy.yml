@@ -33,7 +33,7 @@ jobs:
 
       - name: Deploy to CloudRun
         run: |
-          tcb cloudrun deploy \
+          echo "y" | tcb cloudrun deploy \
             --envId ${{ secrets.TCB_ENV_ID }} \
             --serviceName ${{ secrets.TCB_SERVICE_NAME || 'budget-manager' }}
         continue-on-error: false
