@@ -19,14 +19,29 @@
 
 ### 2. 配置 GitHub Secrets
 
-在 GitHub 仓库中：
+在 GitHub 仓库中配置 Secrets（需要仓库管理员权限）：
 
-1. 进入「Settings」→「Secrets and variables」→「Actions」
-2. 点击「New repository secret」添加以下密钥：
+**路径一（推荐）**：
+1. 进入仓库主页
+2. 点击右上角的 **Settings**（设置）
+3. 在左侧菜单中找到 **Secrets and variables** → **Actions**
+4. 点击 **New repository secret** 按钮
+5. 添加以下密钥：
 
    - **TCB_ENV_ID**: 腾讯云环境ID
    - **TCB_SECRET_ID**: 腾讯云 API 密钥 ID
    - **TCB_SECRET_KEY**: 腾讯云 API 密钥 Key
+
+**路径二（如果找不到上述选项）**：
+1. 进入仓库主页
+2. 点击 **Settings**
+3. 在左侧菜单中找到 **Secrets**（可能直接显示为 Secrets）
+4. 点击 **New secret** 按钮
+5. 添加上述密钥
+
+**注意**：
+- 如果看不到 Settings 选项，说明您没有仓库的管理员权限，需要联系仓库所有者
+- Secrets 一旦创建，值就无法再查看，只能删除后重新创建
 
 ### 3. 触发部署
 

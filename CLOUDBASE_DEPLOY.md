@@ -10,11 +10,24 @@
 
 #### 1. 配置 GitHub Secrets
 
-在 GitHub 仓库设置中添加以下 Secrets：
+在 GitHub 仓库中配置 Secrets（需要仓库管理员权限）：
 
-- `TCB_ENV_ID`: 腾讯云环境ID（在 CloudBase 控制台查看）
-- `TCB_SECRET_ID`: 腾讯云 API 密钥 ID（在腾讯云控制台-访问管理-API密钥管理）
-- `TCB_SECRET_KEY`: 腾讯云 API 密钥 Key
+**步骤**：
+1. 进入 GitHub 仓库主页
+2. 点击右上角的 **Settings**（设置）
+3. 在左侧菜单中找到：
+   - **Secrets and variables** → **Actions**（新版本）
+   - 或直接找到 **Secrets**（旧版本）
+4. 点击 **New repository secret** 或 **New secret** 按钮
+5. 添加以下 Secrets：
+
+   - **TCB_ENV_ID**: 腾讯云环境ID（在 CloudBase 控制台查看）
+   - **TCB_SECRET_ID**: 腾讯云 API 密钥 ID（在腾讯云控制台-访问管理-API密钥管理）
+   - **TCB_SECRET_KEY**: 腾讯云 API 密钥 Key
+
+**注意**：
+- 如果看不到 Settings 选项，说明您没有仓库的管理员权限
+- Secrets 的值一旦创建就无法再查看，只能删除后重新创建
 
 #### 2. 触发自动部署
 
