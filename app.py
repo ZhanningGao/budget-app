@@ -7,6 +7,12 @@ from openpyxl.styles import Font, Alignment
 import json
 import re
 from werkzeug.utils import secure_filename
+from database import (
+    init_database, get_data_for_api, add_item, update_item, delete_items,
+    add_category, delete_category, get_item_by_id, import_from_excel_data,
+    backup_database, list_backups, restore_database, delete_backup, cleanup_old_backups,
+    update_category_order, update_item_order
+)
 
 # 尝试导入reportlab用于PDF导出
 try:
@@ -62,8 +68,58 @@ def allowed_file(filename):
     """检查文件扩展名是否允许"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# 支持环境变量配置Excel文件路径
+# 支持环境变量配置Excel文件路径（用于导入和导出）
 EXCEL_FILE = os.getenv('EXCEL_FILE', '红玺台复式装修预算表.xlsx')
+
+# 初始化数据库
+init_database()
+
+# 如果存在Excel文件且数据库为空，自动导入Excel数据
+def migrate_excel_to_db_if_needed():
+    """如果数据库为空且存在Excel文件，自动导入"""
+    from database import get_all_items, get_all_categories
+    items = get_all_items()
+    categories = get_all_categories()
+    
+    # 如果数据库为空且Excel文件存在，则导入
+    if not items and not categories and os.path.exists(EXCEL_FILE):
+        try:
+            print("检测到Excel文件，正在导入到数据库...")
+            excel_data = parse_excel()
+            import_from_excel_data(excel_data)
+            print("✅ Excel数据已成功导入到数据库")
+        except Exception as e:
+            print(f"⚠️ Excel导入失败: {e}")
+
+# 启动时执行迁移
+migrate_excel_to_db_if_needed()
+
+# 定期自动备份（使用后台线程）
+import threading
+import time
+
+def auto_backup_worker():
+    """后台线程：定期自动备份数据库"""
+    while True:
+        try:
+            # 每24小时备份一次
+            time.sleep(24 * 60 * 60)
+            
+            # 创建自动备份
+            backup_info = backup_database('auto_backup')
+            print(f"✅ 自动备份已创建: {backup_info['filename']}")
+            
+            # 清理旧备份（保留最新的20个）
+            deleted_count = cleanup_old_backups(keep_count=20)
+            if deleted_count > 0:
+                print(f"🗑️ 已清理 {deleted_count} 个旧备份")
+        except Exception as e:
+            print(f"⚠️ 自动备份失败: {e}")
+
+# 启动自动备份线程
+backup_thread = threading.Thread(target=auto_backup_worker, daemon=True)
+backup_thread.start()
+print("✅ 自动备份服务已启动（每24小时备份一次）")
 
 def validate_excel_format(file_path):
     """验证Excel文件格式是否符合要求"""
@@ -160,7 +216,7 @@ def parse_excel():
     
     # 表头行（第4行，索引3）
     header_row = 3
-    headers = ['序号', '项目', '单位', '预算数量', '1st预算费用', '2nd预算费用', '最终实际花费', '差价', '备注']
+    headers = ['序号', '项目', '单位', '预算数量', '预算费用', '当前投入', '最终花费', '差价', '备注']
     
     categories = []
     items = []
@@ -186,6 +242,37 @@ def parse_excel():
         elif first_col.isdigit() and i > header_row:
             try:
                 seq_num = int(float(first_col))
+                # 读取原始列（兼容旧格式）
+                # Excel列顺序：序号(0), 项目(1), 单位(2), 预算数量(3), 1st预算(4), 2nd预算(5), 最终实际花费(6), 差价(7), 备注(8)
+                val_1st = str(row[4]).strip() if pd.notna(row[4]) and str(row[4]) != 'nan' else ''
+                val_2nd = str(row[5]).strip() if len(row) > 5 and pd.notna(row[5]) and str(row[5]) != 'nan' else ''
+                val_old_actual = str(row[6]).strip() if len(row) > 6 and pd.notna(row[6]) and str(row[6]) != 'nan' else ''  # 旧格式：最终实际花费
+                val_diff = str(row[7]).strip() if len(row) > 7 and pd.notna(row[7]) and str(row[7]) != 'nan' else ''  # 差价
+                val_remark = str(row[8]).strip() if len(row) > 8 and pd.notna(row[8]) and str(row[8]) != 'nan' else ''  # 备注
+                
+                # 合并1st和2nd预算为预算费用：优先使用2nd，否则使用1st
+                if val_2nd and val_2nd.replace('.','').replace('-','').isdigit():
+                    budget_value = val_2nd
+                elif val_1st and val_1st.replace('.','').replace('-','').isdigit():
+                    budget_value = val_1st
+                else:
+                    budget_value = ''
+                
+                # 当前投入：从旧格式的"最终实际花费"读取，但如果等于预算值，说明可能是错误数据，设为空
+                current_value = val_old_actual
+                if budget_value and current_value:
+                    try:
+                        budget_num = float(budget_value)
+                        current_num = float(current_value)
+                        # 如果当前投入等于预算，可能是错误数据，设为空（默认为0）
+                        if abs(budget_num - current_num) < 0.01:
+                            current_value = ''
+                    except:
+                        pass
+                
+                # 最终花费：旧格式Excel中没有此列，默认为空
+                final_value = ''
+                
                 item = {
                     'id': item_id,
                     'row_index': i,  # 原始行索引
@@ -194,11 +281,11 @@ def parse_excel():
                     '项目': str(row[1]).strip() if pd.notna(row[1]) and str(row[1]) != 'nan' else '',
                     '单位': str(row[2]).strip() if pd.notna(row[2]) and str(row[2]) != 'nan' else '',
                     '预算数量': str(row[3]).strip() if pd.notna(row[3]) and str(row[3]) != 'nan' else '',
-                    '1st预算费用': str(row[4]).strip() if pd.notna(row[4]) and str(row[4]) != 'nan' else '',
-                    '2nd预算费用': str(row[5]).strip() if pd.notna(row[5]) and str(row[5]) != 'nan' else '',
-                    '最终实际花费': str(row[6]).strip() if pd.notna(row[6]) and str(row[6]) != 'nan' else '',
-                    '差价': str(row[7]).strip() if pd.notna(row[7]) and str(row[7]) != 'nan' else '',
-                    '备注': str(row[8]).strip() if len(row) > 8 and pd.notna(row[8]) and str(row[8]) != 'nan' else ''
+                    '预算费用': budget_value,
+                    '当前投入': current_value,
+                    '最终花费': final_value,
+                    '差价': val_diff,
+                    '备注': val_remark
                 }
                 # 清理空值
                 for key in item:
@@ -236,26 +323,21 @@ def save_excel(data):
                 ws.cell(row=row_idx, column=3, value=item['单位'] if item['单位'] else None)
                 ws.cell(row=row_idx, column=4, value=item['预算数量'] if item['预算数量'] else None)
                 
-                # 列顺序：1st预算(5), 2nd预算(6), 实际花费(7)
-                val_1st = float(item['1st预算费用']) if item['1st预算费用'] and item['1st预算费用'].replace('.','').isdigit() else None
-                val_2nd = float(item['2nd预算费用']) if item['2nd预算费用'] and item['2nd预算费用'].replace('.','').isdigit() else None
-                val_actual = float(item['最终实际花费']) if item['最终实际花费'] and item['最终实际花费'].replace('.','').isdigit() else None
+                # 列顺序：预算费用(5), 当前投入(6), 最终花费(7), 差价(8)
+                # 兼容旧格式
+                val_1st = float(item.get('1st预算费用', 0) or 0) if item.get('1st预算费用') and str(item.get('1st预算费用')).replace('.','').replace('-','').isdigit() else 0
+                val_2nd = float(item.get('2nd预算费用', 0) or 0) if item.get('2nd预算费用') and str(item.get('2nd预算费用')).replace('.','').replace('-','').isdigit() else 0
+                val_budget = float(item.get('预算费用', 0) or 0) if item.get('预算费用') and str(item.get('预算费用')).replace('.','').replace('-','').isdigit() else (val_2nd if val_2nd > 0 else val_1st)
+                val_current = float(item.get('当前投入', 0) or 0) if item.get('当前投入') and str(item.get('当前投入')).replace('.','').replace('-','').isdigit() else (float(item.get('最终实际花费', 0) or 0) if item.get('最终实际花费') and str(item.get('最终实际花费')).replace('.','').replace('-','').isdigit() else 0)
+                val_final = float(item.get('最终花费', 0) or 0) if item.get('最终花费') and str(item.get('最终花费')).replace('.','').replace('-','').isdigit() else 0
                 
-                # 设置默认值：2nd预算默认等于1st预算，实际花费默认0
-                if val_1st and not val_2nd:
-                    val_2nd = val_1st
-                if not val_actual:
-                    val_actual = 0
+                # 自动计算差价（预算费用 - 最终花费）
+                val_diff = val_budget - val_final
                 
-                # 自动计算差价（2nd预算 - 实际花费）
-                val_diff = None
-                if val_2nd is not None and val_actual is not None:
-                    val_diff = float(val_2nd) - float(val_actual)
-                
-                ws.cell(row=row_idx, column=5, value=val_1st)  # 1st预算
-                ws.cell(row=row_idx, column=6, value=val_2nd)  # 2nd预算
-                ws.cell(row=row_idx, column=7, value=val_actual)  # 实际花费
-                ws.cell(row=row_idx, column=8, value=val_diff)  # 差价（自动计算）
+                ws.cell(row=row_idx, column=5, value=val_budget if val_budget > 0 else None)  # 预算费用
+                ws.cell(row=row_idx, column=6, value=val_current if val_current > 0 else None)  # 当前投入
+                ws.cell(row=row_idx, column=7, value=val_final if val_final > 0 else None)  # 最终花费
+                ws.cell(row=row_idx, column=8, value=val_diff if val_diff != 0 else None)  # 差价（自动计算）
                 ws.cell(row=row_idx, column=9, value=item['备注'] if item['备注'] else None)
     
     # 更新合计
@@ -312,26 +394,18 @@ def add_item_to_excel(item_data, category):
         ws.cell(insert_row, 3, value=item_data.get('单位', '') if item_data.get('单位') else None)
         ws.cell(insert_row, 4, value=item_data.get('预算数量', '') if item_data.get('预算数量') else None)
         
-        # 列顺序：1st预算(5), 2nd预算(6), 实际花费(7)
-        val_1st = float(item_data['1st预算费用']) if item_data.get('1st预算费用') and item_data['1st预算费用'].replace('.','').isdigit() else None
-        val_2nd = float(item_data['2nd预算费用']) if item_data.get('2nd预算费用') and item_data['2nd预算费用'].replace('.','').isdigit() else None
-        val_actual = float(item_data['最终实际花费']) if item_data.get('最终实际花费') and item_data['最终实际花费'].replace('.','').isdigit() else None
+        # 列顺序：预算费用(5), 当前投入(6), 最终花费(7), 差价(8)
+        val_budget = float(item_data['预算费用']) if item_data.get('预算费用') and str(item_data['预算费用']).replace('.','').replace('-','').isdigit() else 0
+        val_current = float(item_data['当前投入']) if item_data.get('当前投入') and str(item_data['当前投入']).replace('.','').replace('-','').isdigit() else 0
+        val_final = float(item_data['最终花费']) if item_data.get('最终花费') and str(item_data['最终花费']).replace('.','').replace('-','').isdigit() else 0
         
-        # 设置默认值：2nd预算默认等于1st预算，实际花费默认0
-        if val_1st and not val_2nd:
-            val_2nd = val_1st
-        if not val_actual:
-            val_actual = 0
+        # 自动计算差价（预算费用 - 最终花费）
+        val_diff = val_budget - val_final
         
-        # 自动计算差价（2nd预算 - 实际花费）
-        val_diff = None
-        if val_2nd is not None and val_actual is not None:
-            val_diff = float(val_2nd) - float(val_actual)
-        
-        ws.cell(insert_row, 5, value=val_1st)  # 1st预算
-        ws.cell(insert_row, 6, value=val_2nd)  # 2nd预算
-        ws.cell(insert_row, 7, value=val_actual)  # 实际花费
-        ws.cell(insert_row, 8, value=val_diff)  # 差价（自动计算）
+        ws.cell(insert_row, 5, value=val_budget if val_budget > 0 else None)  # 预算费用
+        ws.cell(insert_row, 6, value=val_current if val_current > 0 else None)  # 当前投入
+        ws.cell(insert_row, 7, value=val_final if val_final > 0 else None)  # 最终花费
+        ws.cell(insert_row, 8, value=val_diff if val_diff != 0 else None)  # 差价（自动计算）
         ws.cell(insert_row, 9, value=item_data.get('备注', '') if item_data.get('备注') else None)
         
         # 更新合计
@@ -394,9 +468,9 @@ def add_category_to_excel(category_name):
     ws.cell(insert_row + 1, 2, value='项目')
     ws.cell(insert_row + 1, 3, value='单位')
     ws.cell(insert_row + 1, 4, value='预算数量')
-    ws.cell(insert_row + 1, 5, value='1st 预算费用')
-    ws.cell(insert_row + 1, 6, value='2nd 预算费用')
-    ws.cell(insert_row + 1, 7, value='最终实际花费')
+    ws.cell(insert_row + 1, 5, value='预算费用')
+    ws.cell(insert_row + 1, 6, value='当前投入')
+    ws.cell(insert_row + 1, 7, value='最终花费')
     ws.cell(insert_row + 1, 8, value='差价')
     ws.cell(insert_row + 1, 9, value='备注：选购意向（网购/实体店，品牌，型号等）')
     
@@ -514,50 +588,60 @@ def normalize_imported_data():
         first_cell = safe_get_cell_value(ws, i, 1)
         # 检查是否是数据行（序号是数字）
         if first_cell and str(first_cell).strip().isdigit():
-            # 列顺序：1st预算(5), 2nd预算(6), 实际花费(7), 差价(8)
+            # 列顺序：预算费用(5), 当前投入(6), 最终花费(7), 差价(8)
+            # 兼容旧格式：如果列5和列6都有值，合并为预算费用
             val_1st = safe_get_cell_value(ws, i, 5)
             val_2nd = safe_get_cell_value(ws, i, 6)
-            val_actual = safe_get_cell_value(ws, i, 7)
+            val_current = safe_get_cell_value(ws, i, 7)  # 可能是旧的实际花费或新的当前投入
+            val_final = safe_get_cell_value(ws, i, 8) if ws.max_column >= 8 else None  # 最终花费可能在列8或列9
             
             # 检查值是否为空（None或空字符串）
             def is_empty(val):
                 return val is None or (isinstance(val, str) and not val.strip())
             
-            # 处理1st预算：如果为空，设为0；否则尝试转换为数字
-            if is_empty(val_1st):
-                val_1st = 0
+            # 处理预算费用：合并1st和2nd，优先使用2nd
+            val_budget = 0
+            if not is_empty(val_2nd):
+                try:
+                    val_budget = float(val_2nd)
+                except (ValueError, TypeError):
+                    if not is_empty(val_1st):
+                        try:
+                            val_budget = float(val_1st)
+                        except (ValueError, TypeError):
+                            val_budget = 0
+            elif not is_empty(val_1st):
+                try:
+                    val_budget = float(val_1st)
+                except (ValueError, TypeError):
+                    val_budget = 0
+            
+            # 处理当前投入：如果为空，设为0
+            if is_empty(val_current):
+                val_current = 0
             else:
                 try:
-                    val_1st = float(val_1st)
+                    val_current = float(val_current)
                 except (ValueError, TypeError):
-                    val_1st = 0
+                    val_current = 0
             
-            # 处理2nd预算：如果为空，则等于1st预算；否则尝试转换为数字
-            if is_empty(val_2nd):
-                val_2nd = val_1st  # 如果1st预算有值，2nd预算等于1st预算
+            # 处理最终花费：如果为空，设为0
+            if is_empty(val_final):
+                val_final = 0
             else:
                 try:
-                    val_2nd = float(val_2nd)
+                    val_final = float(val_final)
                 except (ValueError, TypeError):
-                    val_2nd = val_1st
+                    val_final = 0
             
-            # 处理实际花费：如果为空，设为0；否则尝试转换为数字
-            if is_empty(val_actual):
-                val_actual = 0
-            else:
-                try:
-                    val_actual = float(val_actual)
-                except (ValueError, TypeError):
-                    val_actual = 0
-            
-            # 计算差价（2nd预算 - 实际花费）
-            val_diff = val_2nd - val_actual
+            # 计算差价（预算费用 - 最终花费）
+            val_diff = val_budget - val_final
             
             # 更新Excel中的值（保留0值，因为0是有效的）
-            safe_set_cell_value(ws, i, 5, val_1st)  # 1st预算
-            safe_set_cell_value(ws, i, 6, val_2nd)  # 2nd预算
-            safe_set_cell_value(ws, i, 7, val_actual)  # 实际花费
-            safe_set_cell_value(ws, i, 8, val_diff)  # 差价
+            safe_set_cell_value(ws, i, 5, val_budget if val_budget > 0 else None)  # 预算费用
+            safe_set_cell_value(ws, i, 6, val_current if val_current > 0 else None)  # 当前投入
+            safe_set_cell_value(ws, i, 7, val_final if val_final > 0 else None)  # 最终花费
+            safe_set_cell_value(ws, i, 8, val_diff if val_diff != 0 else None)  # 差价
     
     # 更新合计
     update_totals_in_excel()
@@ -596,34 +680,34 @@ def update_totals_in_excel():
         
         if total_row:
             # 计算该分类下所有项目的合计
-            total_1st = 0
-            total_2nd = 0
-            total_actual = 0
+            total_budget = 0
+            total_current = 0
+            total_final = 0
             total_diff = 0
             
             # 从分类行后到合计行前，累加所有数字序号行的费用
             for i in range(cat_row + 1, total_row):
                 first_cell = safe_get_cell_value(ws, i, 1)
                 if first_cell and str(first_cell).strip().isdigit():
-                    # 列顺序：1st预算(5), 2nd预算(6), 实际花费(7), 差价(8)
-                    val_1st = safe_get_cell_value(ws, i, 5)
-                    val_2nd = safe_get_cell_value(ws, i, 6)
-                    val_actual = safe_get_cell_value(ws, i, 7)
+                    # 列顺序：预算费用(5), 当前投入(6), 最终花费(7), 差价(8)
+                    val_budget = safe_get_cell_value(ws, i, 5)
+                    val_current = safe_get_cell_value(ws, i, 6)
+                    val_final = safe_get_cell_value(ws, i, 7)
                     
-                    if val_1st and isinstance(val_1st, (int, float)):
-                        total_1st += float(val_1st)
-                    if val_2nd and isinstance(val_2nd, (int, float)):
-                        total_2nd += float(val_2nd)
-                    if val_actual and isinstance(val_actual, (int, float)):
-                        total_actual += float(val_actual)
+                    if val_budget and isinstance(val_budget, (int, float)):
+                        total_budget += float(val_budget)
+                    if val_current and isinstance(val_current, (int, float)):
+                        total_current += float(val_current)
+                    if val_final and isinstance(val_final, (int, float)):
+                        total_final += float(val_final)
             
-            # 计算差价合计（2nd预算 - 实际花费）
-            total_diff = total_2nd - total_actual
+            # 计算差价合计（预算费用 - 最终花费）
+            total_diff = total_budget - total_final
             
-            # 更新合计行（列顺序：1st预算(5), 2nd预算(6), 实际花费(7), 差价(8)）
-            safe_set_cell_value(ws, total_row, 5, total_1st if total_1st > 0 else None)  # 1st预算
-            safe_set_cell_value(ws, total_row, 6, total_2nd if total_2nd > 0 else None)  # 2nd预算
-            safe_set_cell_value(ws, total_row, 7, total_actual if total_actual > 0 else None)  # 实际花费
+            # 更新合计行（列顺序：预算费用(5), 当前投入(6), 最终花费(7), 差价(8)）
+            safe_set_cell_value(ws, total_row, 5, total_budget if total_budget > 0 else None)  # 预算费用
+            safe_set_cell_value(ws, total_row, 6, total_current if total_current > 0 else None)  # 当前投入
+            safe_set_cell_value(ws, total_row, 7, total_final if total_final > 0 else None)  # 最终花费
             safe_set_cell_value(ws, total_row, 8, total_diff if total_diff != 0 else None)  # 差价
     
     wb.save(EXCEL_FILE)
@@ -652,31 +736,36 @@ def verify_password():
 
 @app.route('/api/load', methods=['GET'])
 def load_data():
-    """加载Excel文件数据"""
+    """加载数据库数据"""
     try:
-        if not os.path.exists(EXCEL_FILE):
-            return jsonify({'error': '文件不存在'}), 404
-        
-        data = parse_excel()
+        data = get_data_for_api()
         return jsonify({
             'success': True,
             'categories': data['categories'],
             'items': data['items'],
-            'headers': data['headers']
+            'headers': data['headers'],
+            'category_map': data.get('category_map', {})  # 添加分类ID映射
         })
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 @app.route('/api/add', methods=['POST'])
-def add_item():
+def add_item_route():
     """添加新项目"""
     try:
         data = request.json
         item = data.get('item', {})
         category = data.get('category', '')
         
-        add_item_to_excel(item, category)
+        # 计算差价
+        budget_cost = float(item.get('预算费用', 0) or 0)
+        final_cost = float(item.get('最终花费', 0) or 0)
+        item['差价'] = str(budget_cost - final_cost)
+        
+        # 调用数据库模块的add_item函数
+        from database import add_item as db_add_item
+        db_add_item(item, category)
         
         return jsonify({'success': True, 'message': '添加成功'})
     except Exception as e:
@@ -684,7 +773,7 @@ def add_item():
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 @app.route('/api/add-category', methods=['POST'])
-def add_category():
+def add_category_route():
     """添加新分类"""
     try:
         data = request.json
@@ -693,35 +782,169 @@ def add_category():
         if not category_name:
             return jsonify({'error': '分类名称不能为空'}), 400
         
-        add_category_to_excel(category_name)
+        add_category(category_name)
         
         return jsonify({'success': True, 'message': '分类添加成功'})
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
+@app.route('/api/delete-category', methods=['POST'])
+def delete_category_route():
+    """删除分类"""
+    try:
+        data = request.json
+        category_id = data.get('category_id')
+        
+        if category_id is None:
+            return jsonify({'error': '请提供分类ID'}), 400
+        
+        try:
+            category_id = int(category_id)
+        except (ValueError, TypeError):
+            return jsonify({'error': '无效的分类ID'}), 400
+        
+        result_message = delete_category(category_id)
+        
+        return jsonify({'success': True, 'message': result_message})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+@app.route('/api/backup', methods=['POST'])
+def backup_route():
+    """创建数据库备份"""
+    try:
+        data = request.json or {}
+        description = data.get('description', '').strip()
+        
+        backup_info = backup_database(description)
+        
+        # 自动清理旧备份（保留最新的20个）
+        cleanup_old_backups(keep_count=20)
+        
+        return jsonify({
+            'success': True,
+            'message': f'备份创建成功: {backup_info["filename"]}',
+            'backup': backup_info
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+@app.route('/api/backups', methods=['GET'])
+def list_backups_route():
+    """列出所有备份"""
+    try:
+        backups = list_backups()
+        return jsonify({'success': True, 'backups': backups})
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+@app.route('/api/restore', methods=['POST'])
+def restore_route():
+    """恢复数据库"""
+    try:
+        data = request.json
+        backup_filename = data.get('backup_filename')
+        
+        if not backup_filename:
+            return jsonify({'error': '请提供备份文件名'}), 400
+        
+        result_message = restore_database(backup_filename)
+        
+        return jsonify({'success': True, 'message': result_message})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+@app.route('/api/delete-backup', methods=['POST'])
+def delete_backup_route():
+    """删除备份"""
+    try:
+        data = request.json
+        backup_filename = data.get('backup_filename')
+        
+        if not backup_filename:
+            return jsonify({'error': '请提供备份文件名'}), 400
+        
+        result_message = delete_backup(backup_filename)
+        
+        return jsonify({'success': True, 'message': result_message})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+@app.route('/api/update-category-order', methods=['POST'])
+def update_category_order_route():
+    """更新分类排序"""
+    try:
+        data = request.json
+        category_orders = data.get('orders', [])
+        
+        if not category_orders:
+            return jsonify({'error': '请提供分类排序数据'}), 400
+        
+        update_category_order(category_orders)
+        return jsonify({'success': True, 'message': '分类排序已更新'})
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+@app.route('/api/update-item-order', methods=['POST'])
+def update_item_order_route():
+    """更新项目排序"""
+    try:
+        data = request.json
+        category_id = data.get('category_id')
+        item_orders = data.get('orders', [])
+        
+        if category_id is None:
+            return jsonify({'error': '请提供分类ID'}), 400
+        if not item_orders:
+            return jsonify({'error': '请提供项目排序数据'}), 400
+        
+        update_item_order(category_id, item_orders)
+        return jsonify({'success': True, 'message': '项目排序已更新'})
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
 @app.route('/api/update', methods=['POST'])
-def update_item():
+def update_item_route():
     """更新项目"""
     try:
         data = request.json
         item = data.get('item', {})
         
-        # 重新解析并更新
-        excel_data = parse_excel()
-        
         # 找到要更新的项目
         item_id = item.get('id')
-        for i, existing_item in enumerate(excel_data['items']):
-            if existing_item['id'] == item_id:
-                # 更新数据
-                for key in ['序号', '项目', '单位', '预算数量', '1st预算费用', '最终实际花费', '2nd预算费用', '差价', '备注']:
-                    if key in item:
-                        existing_item[key] = item[key]
-                excel_data['items'][i] = existing_item
-                break
         
-        save_excel(excel_data)
+        if not item_id:
+            return jsonify({'error': '项目ID不能为空'}), 400
+        
+        # 检查项目是否存在
+        existing_item = get_item_by_id(item_id)
+        if not existing_item:
+            return jsonify({'error': '项目不存在'}), 404
+        
+        # 计算差价
+        budget_cost = float(item.get('预算费用', 0) or 0)
+        final_cost = float(item.get('最终花费', 0) or 0)
+        item['差价'] = str(budget_cost - final_cost)
+        
+        # 获取分类名
+        category_name = item.get('category', existing_item.get('category_name'))
+        
+        # 更新项目
+        update_item(item_id, item, category_name)
         
         return jsonify({'success': True, 'message': '更新成功'})
     except Exception as e:
@@ -729,7 +952,7 @@ def update_item():
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 @app.route('/api/delete', methods=['POST'])
-def delete_item():
+def delete_item_route():
     """删除项目"""
     try:
         data = request.json
@@ -738,18 +961,8 @@ def delete_item():
         if not item_ids:
             return jsonify({'error': '请选择要删除的项目'}), 400
         
-        # 获取要删除的行索引
-        excel_data = parse_excel()
-        row_indices = []
-        for item in excel_data['items']:
-            if item['id'] in item_ids and 'row_index' in item:
-                row_indices.append(item['row_index'])
-        
-        if not row_indices:
-            return jsonify({'error': '未找到要删除的项目'}), 400
-        
-        # 删除项目（会自动保护分类行）
-        result_message = delete_items_from_excel(row_indices)
+        # 删除项目（会自动保护分类行和合计行）
+        result_message = delete_items(item_ids)
         
         if result_message:
             return jsonify({'success': True, 'message': result_message})
@@ -796,30 +1009,35 @@ def import_file():
                 'warnings': validation['warnings']
             }), 400
         
-        # 备份原文件
-        backup_filename = f'backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}_{EXCEL_FILE}'
-        backup_path = os.path.join(app.config['EXPORT_FOLDER'], backup_filename)
-        if os.path.exists(EXCEL_FILE):
-            import shutil
-            shutil.copy2(EXCEL_FILE, backup_path)
-        
-        # 复制新文件覆盖原文件
-        import shutil
-        shutil.copy2(upload_path, EXCEL_FILE)
+        # 解析Excel文件并导入到数据库
+        # 临时使用上传的文件路径进行解析
+        global EXCEL_FILE
+        original_excel_file = EXCEL_FILE
+        try:
+            # 临时设置Excel文件路径为上传的文件
+            EXCEL_FILE = upload_path
+            
+            # 解析Excel数据
+            excel_data = parse_excel()
+            
+            # 导入到数据库
+            import_from_excel_data(excel_data)
+            
+            # 恢复原Excel文件路径
+            EXCEL_FILE = original_excel_file
+        except Exception as e:
+            EXCEL_FILE = original_excel_file
+            raise e
         
         # 删除临时上传文件
         os.remove(upload_path)
         
-        # 规范化导入的数据：设置默认值并同步2nd预算
-        normalize_imported_data()
-        
-        # 解析新文件获取统计信息
-        data = parse_excel()
+        # 从数据库获取统计信息
+        data = get_data_for_api()
         
         return jsonify({
             'success': True,
             'message': '导入成功',
-            'backup_file': backup_filename,
             'category_count': len(data['categories']),
             'item_count': len(data['items']),
             'warnings': validation['warnings']
@@ -930,9 +1148,9 @@ def add_grand_total_to_excel(file_path):
     wb.close()
 
 def rebuild_excel_from_data():
-    """基于前端数据重新构建Excel文件"""
-    # 获取当前数据
-    data = parse_excel()
+    """基于数据库数据重新构建Excel文件"""
+    # 从数据库获取当前数据
+    data = get_data_for_api()
     categories = data['categories']
     items = data['items']
     
@@ -1007,34 +1225,38 @@ def rebuild_excel_from_data():
         ws.cell(current_row, 2, value='项目')
         ws.cell(current_row, 3, value='单位')
         ws.cell(current_row, 4, value='预算数量')
-        ws.cell(current_row, 5, value='1st 预算费用')
-        ws.cell(current_row, 6, value='2nd 预算费用')
-        ws.cell(current_row, 7, value='最终实际花费')
+        ws.cell(current_row, 5, value='预算费用')
+        ws.cell(current_row, 6, value='当前投入')
+        ws.cell(current_row, 7, value='最终花费')
         ws.cell(current_row, 8, value='差价')
         ws.cell(current_row, 9, value='备注：选购意向（网购/实体店，品牌，型号等）')
         current_row += 1
         
         # 添加该分类下的项目
         category_items = items_by_category.get(category, [])
-        category_total_1st = 0
-        category_total_2nd = 0
-        category_total_actual = 0
+        category_total_budget = 0
+        category_total_current = 0
+        category_total_final = 0
         category_total_diff = 0
         
         # 每个分类的序号从1开始重新生成
         seq_num_in_category = 0
         
         for item in category_items:
-            # 解析数值
-            val_1st = float(item.get('1st预算费用', 0) or 0) if item.get('1st预算费用') and str(item.get('1st预算费用')).replace('.','').isdigit() else 0
-            val_2nd = float(item.get('2nd预算费用', 0) or 0) if item.get('2nd预算费用') and str(item.get('2nd预算费用')).replace('.','').isdigit() else val_1st
-            val_actual = float(item.get('最终实际花费', 0) or 0) if item.get('最终实际花费') and str(item.get('最终实际花费')).replace('.','').isdigit() else 0
-            val_diff = val_2nd - val_actual
+            # 解析数值（兼容旧格式）
+            val_1st = float(item.get('1st预算费用', 0) or 0) if item.get('1st预算费用') and str(item.get('1st预算费用')).replace('.','').replace('-','').isdigit() else 0
+            val_2nd = float(item.get('2nd预算费用', 0) or 0) if item.get('2nd预算费用') and str(item.get('2nd预算费用')).replace('.','').replace('-','').isdigit() else 0
+            val_budget = float(item.get('预算费用', 0) or 0) if item.get('预算费用') and str(item.get('预算费用')).replace('.','').replace('-','').isdigit() else (val_2nd if val_2nd > 0 else val_1st)
+            val_current = float(item.get('当前投入', 0) or 0) if item.get('当前投入') and str(item.get('当前投入')).replace('.','').replace('-','').isdigit() else (float(item.get('最终实际花费', 0) or 0) if item.get('最终实际花费') and str(item.get('最终实际花费')).replace('.','').replace('-','').isdigit() else 0)
+            val_final = float(item.get('最终花费', 0) or 0) if item.get('最终花费') and str(item.get('最终花费')).replace('.','').replace('-','').isdigit() else 0
+            
+            # 计算差价（预算费用 - 最终花费）
+            val_diff = val_budget - val_final
             
             # 累加分类合计
-            category_total_1st += val_1st
-            category_total_2nd += val_2nd
-            category_total_actual += val_actual
+            category_total_budget += val_budget
+            category_total_current += val_current
+            category_total_final += val_final
             category_total_diff += val_diff
             
             # 重新生成序号（每个分类从1开始）
@@ -1044,18 +1266,18 @@ def rebuild_excel_from_data():
             ws.cell(current_row, 2, value=item.get('项目', ''))
             ws.cell(current_row, 3, value=item.get('单位', '') if item.get('单位') else None)
             ws.cell(current_row, 4, value=item.get('预算数量', '') if item.get('预算数量') else None)
-            ws.cell(current_row, 5, value=val_1st if val_1st > 0 else None)
-            ws.cell(current_row, 6, value=val_2nd if val_2nd > 0 else None)
-            ws.cell(current_row, 7, value=val_actual if val_actual > 0 else None)
+            ws.cell(current_row, 5, value=val_budget if val_budget > 0 else None)
+            ws.cell(current_row, 6, value=val_current if val_current > 0 else None)
+            ws.cell(current_row, 7, value=val_final if val_final > 0 else None)
             ws.cell(current_row, 8, value=val_diff if val_diff != 0 else None)
             ws.cell(current_row, 9, value=item.get('备注', '') if item.get('备注') else None)
             current_row += 1
         
         # 添加分类合计行
         ws.cell(current_row, 1, value='合计')
-        ws.cell(current_row, 5, value=category_total_1st if category_total_1st > 0 else None)
-        ws.cell(current_row, 6, value=category_total_2nd if category_total_2nd > 0 else None)
-        ws.cell(current_row, 7, value=category_total_actual if category_total_actual > 0 else None)
+        ws.cell(current_row, 5, value=category_total_budget if category_total_budget > 0 else None)
+        ws.cell(current_row, 6, value=category_total_current if category_total_current > 0 else None)
+        ws.cell(current_row, 7, value=category_total_final if category_total_final > 0 else None)
         ws.cell(current_row, 8, value=category_total_diff if category_total_diff != 0 else None)
         current_row += 1
     
@@ -1172,7 +1394,7 @@ def register_chinese_fonts():
     return font_registered, temp_font_file
 
 def generate_pdf():
-    """使用reportlab生成PDF"""
+    """使用reportlab生成PDF（从数据库读取数据）"""
     global _CHINESE_FONT_NAME
     
     import warnings
@@ -1188,7 +1410,8 @@ def generate_pdf():
     chinese_font_name = _CHINESE_FONT_NAME
     
     try:
-        data = parse_excel()
+        # 从数据库获取数据
+        data = get_data_for_api()
         categories = data['categories']
         items = data['items']
         
@@ -1200,22 +1423,22 @@ def generate_pdf():
                 items_by_category[cat] = []
             items_by_category[cat].append(item)
         
-        # 计算总合计
-        grand_total_1st = 0
-        grand_total_2nd = 0
-        grand_total_actual = 0
+        # 计算总合计（使用新字段名）
+        grand_total_budget = 0
+        grand_total_current = 0
+        grand_total_final = 0
         grand_total_diff = 0
         
         for item in items:
-            val_1st = float(item.get('1st预算费用', 0) or 0) if item.get('1st预算费用') and str(item.get('1st预算费用')).replace('.','').isdigit() else 0
-            val_2nd = float(item.get('2nd预算费用', 0) or 0) if item.get('2nd预算费用') and str(item.get('2nd预算费用')).replace('.','').isdigit() else val_1st
-            val_actual = float(item.get('最终实际花费', 0) or 0) if item.get('最终实际花费') and str(item.get('最终实际花费')).replace('.','').isdigit() else 0
+            val_budget = float(item.get('预算费用', 0) or 0) if item.get('预算费用') and str(item.get('预算费用')).replace('.','').isdigit() else 0
+            val_current = float(item.get('当前投入', 0) or 0) if item.get('当前投入') and str(item.get('当前投入')).replace('.','').isdigit() else 0
+            val_final = float(item.get('最终花费', 0) or 0) if item.get('最终花费') and str(item.get('最终花费')).replace('.','').isdigit() else 0
             
-            grand_total_1st += val_1st
-            grand_total_2nd += val_2nd
-            grand_total_actual += val_actual
+            grand_total_budget += val_budget
+            grand_total_current += val_current
+            grand_total_final += val_final
         
-        grand_total_diff = grand_total_2nd - grand_total_actual
+        grand_total_diff = grand_total_budget - grand_total_final
         
         def format_number(value):
             """格式化数字"""
@@ -1328,8 +1551,9 @@ def generate_pdf():
         
         # 总合计（使用reportlab支持的颜色格式）
         diff_color = "green" if grand_total_diff >= 0 else "red"
-        total_text = f'<b>总合计：</b> 2nd预算 <b><font color=blue>{format_number(grand_total_2nd)}</font></b> 元 | ' \
-                     f'实际花费 <b><font color=green>{format_number(grand_total_actual)}</font></b> 元 | ' \
+        total_text = f'<b>总合计：</b> 预算费用 <b><font color=blue>{format_number(grand_total_budget)}</font></b> 元 | ' \
+                     f'当前投入 <b><font color=orange>{format_number(grand_total_current)}</font></b> 元 | ' \
+                     f'最终花费 <b><font color=green>{format_number(grand_total_final)}</font></b> 元 | ' \
                      f'差价 <b><font color={diff_color}>{format_number(grand_total_diff)}</font></b> 元'
         
         total_table = Table([[Paragraph(total_text, summary_style)]], 
@@ -1350,9 +1574,9 @@ def generate_pdf():
         # 遍历所有分类
         for category in categories:
             category_items = items_by_category.get(category, [])
-            category_total_1st = 0
-            category_total_2nd = 0
-            category_total_actual = 0
+            category_total_budget = 0
+            category_total_current = 0
+            category_total_final = 0
             category_total_diff = 0
             
             # 分类标题
@@ -1370,19 +1594,22 @@ def generate_pdf():
             
             if len(category_items) > 0:
                 # 表头（使用中文字体）
-                table_data = [['序号', '项目名称', '单位', '数量', '1st预算', '2nd预算', '实际花费', '差价', '备注']]
+                table_data = [['序号', '项目名称', '单位', '数量', '预算费用', '当前投入', '最终花费', '差价', '备注']]
                 
                 seq_num = 0
                 for item in category_items:
                     seq_num += 1
-                    val_1st = float(item.get('1st预算费用', 0) or 0) if item.get('1st预算费用') and str(item.get('1st预算费用')).replace('.','').isdigit() else 0
-                    val_2nd = float(item.get('2nd预算费用', 0) or 0) if item.get('2nd预算费用') and str(item.get('2nd预算费用')).replace('.','').isdigit() else val_1st
-                    val_actual = float(item.get('最终实际花费', 0) or 0) if item.get('最终实际花费') and str(item.get('最终实际花费')).replace('.','').isdigit() else 0
-                    val_diff = val_2nd - val_actual
+                    # 兼容旧格式
+                    val_1st = float(item.get('1st预算费用', 0) or 0) if item.get('1st预算费用') and str(item.get('1st预算费用')).replace('.','').replace('-','').isdigit() else 0
+                    val_2nd = float(item.get('2nd预算费用', 0) or 0) if item.get('2nd预算费用') and str(item.get('2nd预算费用')).replace('.','').replace('-','').isdigit() else 0
+                    val_budget = float(item.get('预算费用', 0) or 0) if item.get('预算费用') and str(item.get('预算费用')).replace('.','').replace('-','').isdigit() else (val_2nd if val_2nd > 0 else val_1st)
+                    val_current = float(item.get('当前投入', 0) or 0) if item.get('当前投入') and str(item.get('当前投入')).replace('.','').replace('-','').isdigit() else (float(item.get('最终实际花费', 0) or 0) if item.get('最终实际花费') and str(item.get('最终实际花费')).replace('.','').replace('-','').isdigit() else 0)
+                    val_final = float(item.get('最终花费', 0) or 0) if item.get('最终花费') and str(item.get('最终花费')).replace('.','').replace('-','').isdigit() else 0
+                    val_diff = val_budget - val_final
                     
-                    category_total_1st += val_1st
-                    category_total_2nd += val_2nd
-                    category_total_actual += val_actual
+                    category_total_budget += val_budget
+                    category_total_current += val_current
+                    category_total_final += val_final
                     category_total_diff += val_diff
                     
                     # 处理备注：截断并用小字体显示
@@ -1394,9 +1621,9 @@ def generate_pdf():
                         Paragraph(item.get('项目', ''), normal_style),
                         item.get('单位', ''),
                         item.get('预算数量', ''),
-                        format_number(val_1st),
-                        format_number(val_2nd),
-                        format_number(val_actual),
+                        format_number(val_budget),
+                        format_number(val_current),
+                        format_number(val_final),
                         format_number(val_diff),
                         remark_cell  # 使用Paragraph样式，字体更小
                     ])
@@ -1433,8 +1660,9 @@ def generate_pdf():
                 story.append(table)
             
             # 分类合计
-            summary_text = f'本分类合计：2nd预算 <b>{format_number(category_total_2nd)}</b> 元 | ' \
-                          f'实际花费 <b>{format_number(category_total_actual)}</b> 元 | ' \
+            summary_text = f'本分类合计：预算费用 <b>{format_number(category_total_budget)}</b> 元 | ' \
+                          f'当前投入 <b>{format_number(category_total_current)}</b> 元 | ' \
+                          f'最终花费 <b>{format_number(category_total_final)}</b> 元 | ' \
                           f'差价 <b>{format_number(category_total_diff)}</b> 元'
             
             summary_table = Table([[Paragraph(summary_text, summary_style)]],
@@ -1524,25 +1752,81 @@ def export_pdf():
 def parse_text_local(text):
     """使用本地规则解析自然语言文本，提取装修项目信息"""
     try:
-        # 获取现有分类
-        excel_data = parse_excel()
-        categories = excel_data['categories']
+        # 从数据库获取现有分类
+        data = get_data_for_api()
+        categories = data['categories']
         
         result = {
             '项目': '',
             'category': '',
             '单位': '',
             '预算数量': '',
-            '1st预算费用': '',
-            '最终实际花费': '',
-            '2nd预算费用': '',
+            '预算费用': '',  # 使用新字段名
+            '当前投入': '',  # 使用新字段名
+            '最终花费': '',  # 使用新字段名
             '备注': ''
         }
         
-        # 提取项目名称（通常在开头，逗号或数字之前）
-        project_match = re.search(r'^([^，,，\d]+?)(?:[，,，]|(?=\d))', text)
-        if project_match:
-            result['项目'] = project_match.group(1).strip()
+        # 提取分类名和项目名称
+        # 如果文本包含逗号，第一个部分用于分类匹配，第二个部分用于项目名
+        parts = re.split(r'[，,，]', text)
+        parts = [p.strip() for p in parts if p.strip()]  # 去除空部分
+        
+        if len(parts) >= 2:
+            # 第一个部分用于分类匹配
+            category_candidate = parts[0]
+            # 从第二个部分开始查找项目名（跳过数量和预算信息）
+            project_name = None
+            for i in range(1, len(parts)):
+                part = parts[i].strip()
+                # 如果这个部分看起来像数量（数字+单位），跳过
+                if re.match(r'^\d+(?:\.\d+)?\s*(?:套|个|米|平方米|平方厘米|件|台|张|把|支|根|条|块|片|组|项)$', part):
+                    continue
+                # 如果这个部分看起来像预算/费用信息，跳过
+                if re.match(r'^(?:预算|当前|实际|最终|花费|费用|投入)[：:，,，\s]*\d+', part):
+                    continue
+                # 否则作为项目名
+                project_name = part
+                break
+            
+            # 如果没找到合适的项目名，使用第一个部分作为项目名（第一个部分可能是项目名而不是分类名）
+            if not project_name:
+                # 检查第一个部分是否看起来像分类名（包含"全屋"、"定制"等关键词）
+                if any(kw in category_candidate for kw in ['全屋', '定制', '基装', '智能', '家居']):
+                    # 第一个部分像分类名，但没有找到项目名，使用第二个部分（即使它可能是数量）
+                    if len(parts) >= 2:
+                        project_name = parts[1]
+                else:
+                    # 第一个部分不像分类名，可能是项目名
+                    project_name = category_candidate
+                    category_candidate = None  # 清空分类候选，后续根据项目名匹配
+            
+            if project_name:
+                result['项目'] = project_name
+            # 先尝试将第一个部分作为分类候选（后续会进行匹配）
+            if category_candidate:
+                result['category'] = category_candidate
+        else:
+            # 如果只有一个部分，需要智能提取项目名（排除数字、单位、预算等关键词）
+            # 提取项目名：从开头到第一个数字或关键词之前
+            # 先尝试匹配到第一个数字或关键词之前的内容
+            project_match = re.search(r'^([^，,，\d预算当前实际最终备注]+?)(?=[，,，]|\d|预算|当前|实际|最终|备注|$)', text)
+            if project_match:
+                project_name = project_match.group(1).strip()
+                # 清理项目名（去除末尾的单位、数字等）
+                project_name = re.sub(r'\s*\d+(?:\.\d+)?\s*(?:套|个|米|平方米|平方厘米|件|台|张|把|支|根|条|块|片|组|项)?\s*$', '', project_name)
+                if project_name:
+                    result['项目'] = project_name
+            else:
+                # 如果正则匹配失败，尝试直接提取第一个非数字、非关键词的部分
+                # 找到第一个逗号、数字或关键词的位置
+                match = re.search(r'^([^，,，\d预算当前实际最终备注]+)', text)
+                if match:
+                    project_name = match.group(1).strip()
+                    # 清理项目名
+                    project_name = re.sub(r'\s*\d+(?:\.\d+)?\s*(?:套|个|米|平方米|平方厘米|件|台|张|把|支|根|条|块|片|组|项)?\s*$', '', project_name)
+                    if project_name:
+                        result['项目'] = project_name
         
         # 提取数量（数字+单位，如"1套"、"3个"）
         quantity_match = re.search(r'(\d+(?:\.\d+)?)\s*([套个米平方米平方厘米件台张把支根条块片组项])', text)
@@ -1551,30 +1835,29 @@ def parse_text_local(text):
             result['单位'] = quantity_match.group(2)
         
         # 提取费用（数字+元，或单独的数字）
-        # 1st预算费用
-        budget1_match = re.search(r'(?:1st|第一|预算|1st预算|预算费用)[：:，,，\s]*(\d+(?:\.\d+)?)', text, re.IGNORECASE)
-        if budget1_match:
-            result['1st预算费用'] = budget1_match.group(1)
+        # 预算费用（优先匹配"预算"关键词，支持"预算59000元"格式）
+        budget_match = re.search(r'预算\s*(\d+(?:\.\d+)?)\s*元?', text)
+        if budget_match:
+            result['预算费用'] = budget_match.group(1)
         else:
-            # 如果没有明确标识，尝试找第一个费用数字
-            budget_match = re.search(r'预算\s*(\d+(?:\.\d+)?)', text)
-            if budget_match:
-                result['1st预算费用'] = budget_match.group(1)
+            # 如果没有明确标识，尝试找第一个费用数字（在"元"之前）
+            cost_match = re.search(r'(\d+(?:\.\d+)?)\s*元', text)
+            if cost_match:
+                result['预算费用'] = cost_match.group(1)
         
-        # 2nd预算费用
-        budget2_match = re.search(r'(?:2nd|第二|2nd预算|二次预算)[：:，,，\s]*(\d+(?:\.\d+)?)', text, re.IGNORECASE)
-        if budget2_match:
-            result['2nd预算费用'] = budget2_match.group(1)
-        elif result['1st预算费用']:
-            # 默认等于1st预算
-            result['2nd预算费用'] = result['1st预算费用']
-        
-        # 实际花费
-        actual_match = re.search(r'(?:实际|实际花费|实际费用|花费|费用)[：:，,，\s]*(\d+(?:\.\d+)?)', text)
-        if actual_match:
-            result['最终实际花费'] = actual_match.group(1)
+        # 当前投入（匹配"当前投入"、"当前花费"等，支持"当前投入2000元"格式）
+        current_match = re.search(r'当前投入\s*(\d+(?:\.\d+)?)\s*元?', text)
+        if current_match:
+            result['当前投入'] = current_match.group(1)
         else:
-            result['最终实际花费'] = '0'
+            result['当前投入'] = '0'
+        
+        # 最终花费（匹配"最终花费"、"实际花费"、"实际费用"等）
+        final_match = re.search(r'(?:最终花费|最终费用|实际花费|实际费用)\s*(\d+(?:\.\d+)?)\s*元?', text)
+        if final_match:
+            result['最终花费'] = final_match.group(1)
+        else:
+            result['最终花费'] = '0'
         
         # 提取备注（在"备注"、"品牌"、"型号"等关键词之后）
         remark_keywords = ['备注', '品牌', '型号', '渠道', '介绍', '说明']
@@ -1601,28 +1884,92 @@ def parse_text_local(text):
         # 自动匹配分类（根据项目名称关键词）
         if not result['category'] and result['项目']:
             project_name = result['项目']
+            matched = False
+            # 先尝试精确匹配分类名（如果项目名完全匹配某个分类）
             for cat in categories:
-                # 简单的关键词匹配
-                if any(keyword in project_name or keyword in cat for keyword in ['基装', '基础', '装修']):
-                    if '基装' in cat or '基础' in cat:
-                        result['category'] = cat
-                        break
-                elif any(keyword in project_name or keyword in cat for keyword in ['柜', '衣柜', '鞋柜']):
-                    if '柜' in cat:
-                        result['category'] = cat
-                        break
-                elif any(keyword in project_name or keyword in cat for keyword in ['电器', '家电']):
-                    if '电' in cat:
-                        result['category'] = cat
-                        break
-                elif any(keyword in project_name or keyword in cat for keyword in ['卫浴', '浴室']):
-                    if '卫浴' in cat:
-                        result['category'] = cat
-                        break
+                if project_name == cat or cat in project_name:
+                    result['category'] = cat
+                    matched = True
+                    break
             
-            # 如果还没匹配到，使用第一个分类
-            if not result['category'] and categories:
-                result['category'] = categories[0]
+            # 如果没精确匹配，尝试模糊匹配（关键词匹配 + 相似度匹配）
+            if not matched:
+                best_match = None
+                best_score = 0
+                
+                for cat in categories:
+                    score = 0
+                    
+                    # 1. 关键词匹配（提高权重）
+                    # 基装相关
+                    if any(kw in project_name for kw in ['基装', '基础', '装修', '吊顶', '改水', '改电', '土建', '乳胶漆', '防锈漆', '楼梯']):
+                        if any(kw in cat for kw in ['基装', '基础', '装修']):
+                            score = max(score, 0.8)
+                    # 柜/定制相关（支持部分匹配）
+                    if any(kw in project_name for kw in ['柜', '衣柜', '鞋柜', '橱柜', '定制']):
+                        if any(kw in cat for kw in ['柜', '定制']):
+                            score = max(score, 0.8)
+                    # 电器相关
+                    if any(kw in project_name for kw in ['电器', '家电', '智能', '空调', '冰箱', '洗衣机', '电视', '家居']):
+                        if any(kw in cat for kw in ['电', '智能', '电器', '家居']):
+                            score = max(score, 0.8)
+                    # 卫浴相关
+                    if any(kw in project_name for kw in ['卫浴', '浴室', '卫生间', '马桶', '花洒', '洗手盆', '淋浴']):
+                        if any(kw in cat for kw in ['卫浴', '浴室', '卫生间']):
+                            score = max(score, 0.8)
+                    # 地板相关
+                    if any(kw in project_name for kw in ['地板', '地砖', '瓷砖', '木地板']):
+                        if any(kw in cat for kw in ['地板', '地砖', '瓷砖']):
+                            score = max(score, 0.8)
+                    # 门窗相关
+                    if any(kw in project_name for kw in ['门', '窗', '门窗', '防盗门', '铝合金']):
+                        if any(kw in cat for kw in ['门', '窗', '门窗']):
+                            score = max(score, 0.8)
+                    
+                    # 2. 字符相似度匹配（作为补充）
+                    # 提取关键词（去除常见修饰词）
+                    project_chars = set([c for c in project_name if c not in ['的', '和', '与', '及', '或', '、', ',', '，', ' ', '全', '屋']])
+                    cat_chars = set([c for c in cat if c not in ['的', '和', '与', '及', '或', '、', ',', '，', ' ', '全', '屋']])
+                    common_chars = project_chars & cat_chars
+                    if common_chars:
+                        max_len = max(len(project_chars), len(cat_chars))
+                        if max_len > 0:
+                            char_similarity = len(common_chars) / max_len
+                            # 如果字符相似度较高，提高分数
+                            if char_similarity > 0.3:
+                                score = max(score, char_similarity * 0.6)  # 字符相似度权重较低
+                    
+                    # 3. 部分匹配（如果项目名包含分类名的关键词，或分类名包含项目名的关键词）
+                    # 提取项目名和分类名的核心词（2个字符以上）
+                    project_words = [project_name[i:i+2] for i in range(len(project_name)-1)]
+                    cat_words = [cat[i:i+2] for i in range(len(cat)-1)]
+                    common_words = set(project_words) & set(cat_words)
+                    if common_words:
+                        word_similarity = len(common_words) / max(len(set(project_words)), len(set(cat_words)))
+                        if word_similarity > 0.2:
+                            score = max(score, word_similarity * 0.7)
+                    
+                    # 记录最佳匹配
+                    if score > best_score:
+                        best_score = score
+                        best_match = cat
+                
+                # 如果找到最佳匹配且相似度超过阈值，使用它
+                if best_match and best_score >= 0.3:
+                    result['category'] = best_match
+                    matched = True
+            
+            # 如果还没匹配到，使用项目名称作为新分类名称
+            if not matched:
+                # 提取项目名称的关键部分作为分类名（去掉数量、单位等）
+                category_name = result['项目']
+                # 如果项目名包含逗号，取第一部分
+                if '，' in category_name or ',' in category_name:
+                    category_name = category_name.split('，')[0].split(',')[0].strip()
+                # 如果项目名太长，截取前10个字符
+                if len(category_name) > 10:
+                    category_name = category_name[:10]
+                result['category'] = category_name
         
         # 清理空值
         for key in result:
@@ -1637,7 +1984,7 @@ def parse_text_local(text):
 
 @app.route('/api/parse', methods=['POST'])
 def parse_text():
-    """本地解析自然语言输入"""
+    """本地解析自然语言输入（支持批量）"""
     try:
         data = request.json
         text = data.get('text', '').strip()
@@ -1645,12 +1992,45 @@ def parse_text():
         if not text:
             return jsonify({'error': '请输入文本'}), 400
         
-        result = parse_text_local(text)
+        # 支持批量解析：按换行符分割
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
         
-        if 'error' in result:
-            return jsonify(result), 500
-        
-        return jsonify(result)
+        if len(lines) == 1:
+            # 单个项目
+            result = parse_text_local(lines[0])
+            if 'error' in result:
+                return jsonify(result), 500
+            return jsonify({'success': True, 'item': result.get('item'), 'items': [result.get('item')], 'is_batch': False})
+        else:
+            # 批量解析
+            items = []
+            errors = []
+            for i, line in enumerate(lines, 1):
+                try:
+                    result = parse_text_local(line)
+                    if 'item' in result:
+                        items.append(result['item'])
+                    else:
+                        errors.append(f'第{i}行: {result.get("error", "解析失败")}')
+                except Exception as e:
+                    errors.append(f'第{i}行: {str(e)}')
+            
+            if items:
+                return jsonify({
+                    'success': True, 
+                    'items': items, 
+                    'is_batch': True,
+                    'total': len(lines),
+                    'success_count': len(items),
+                    'error_count': len(errors),
+                    'errors': errors if errors else None
+                })
+            else:
+                return jsonify({
+                    'success': False, 
+                    'error': '所有项目解析失败',
+                    'errors': errors
+                }), 400
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
@@ -1669,7 +2049,15 @@ def parse_and_add():
             category = item.get('category', '')
             if 'category' in item:
                 del item['category']
-            add_item_to_excel(item, category)
+            
+            # 计算差价
+            budget_cost = float(item.get('预算费用', 0) or 0)
+            final_cost = float(item.get('最终花费', 0) or 0)
+            item['差价'] = str(budget_cost - final_cost)
+            
+            # 调用数据库模块的add_item函数
+            from database import add_item as db_add_item
+            db_add_item(item, category)
             return jsonify({
                 'success': True,
                 'message': '智能添加成功',
@@ -1680,27 +2068,111 @@ def parse_and_add():
         if not text:
             return jsonify({'error': '请输入文本'}), 400
         
-        # 解析文本
-        parse_result = parse_text_local(text)
-        if 'error' in parse_result:
-            return jsonify(parse_result), 500
+        # 支持批量解析：按换行符分割
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
         
-        item = parse_result['item']
-        category = item.get('category', '')
-        
-        # 清理category字段，从item中移除
-        if 'category' in item:
-            del item['category']
-        
-        # 添加到Excel
-        add_item_to_excel(item, category)
-        
-        return jsonify({
-            'success': True,
-            'message': '智能添加成功',
-            'item': item,
-            'category': category
-        })
+        if len(lines) == 1:
+            # 单个项目
+            parse_result = parse_text_local(lines[0])
+            if 'error' in parse_result:
+                return jsonify(parse_result), 500
+            
+            item = parse_result['item']
+            category = item.get('category', '')
+            
+            # 清理category字段，从item中移除
+            if 'category' in item:
+                del item['category']
+            
+            # 兼容旧字段名，转换为新字段名
+            if '1st预算费用' in item and item['1st预算费用']:
+                if not item.get('预算费用'):
+                    item['预算费用'] = item['1st预算费用']
+            if '2nd预算费用' in item and item['2nd预算费用']:
+                if not item.get('预算费用'):
+                    item['预算费用'] = item['2nd预算费用']
+            if '最终实际花费' in item and item['最终实际花费']:
+                if not item.get('最终花费'):
+                    item['最终花费'] = item['最终实际花费']
+            
+            # 计算差价
+            budget_cost = float(item.get('预算费用', 0) or 0)
+            final_cost = float(item.get('最终花费', 0) or 0)
+            item['差价'] = str(budget_cost - final_cost)
+            
+            # 添加到数据库
+            from database import add_item as db_add_item
+            db_add_item(item, category)
+            
+            return jsonify({
+                'success': True,
+                'message': '智能添加成功',
+                'item': item,
+                'category': category,
+                'count': 1
+            })
+        else:
+            # 批量添加
+            from database import add_item as db_add_item
+            success_count = 0
+            error_count = 0
+            errors = []
+            
+            for i, line in enumerate(lines, 1):
+                try:
+                    parse_result = parse_text_local(line)
+                    if 'error' in parse_result:
+                        error_count += 1
+                        errors.append(f'第{i}行: {parse_result.get("error", "解析失败")}')
+                        continue
+                    
+                    item = parse_result['item']
+                    category = item.get('category', '')
+                    
+                    # 清理category字段
+                    if 'category' in item:
+                        del item['category']
+                    
+                    # 兼容旧字段名
+                    if '1st预算费用' in item and item['1st预算费用']:
+                        if not item.get('预算费用'):
+                            item['预算费用'] = item['1st预算费用']
+                    if '2nd预算费用' in item and item['2nd预算费用']:
+                        if not item.get('预算费用'):
+                            item['预算费用'] = item['2nd预算费用']
+                    if '最终实际花费' in item and item['最终实际花费']:
+                        if not item.get('最终花费'):
+                            item['最终花费'] = item['最终实际花费']
+                    
+                    # 计算差价
+                    budget_cost = float(item.get('预算费用', 0) or 0)
+                    final_cost = float(item.get('最终花费', 0) or 0)
+                    item['差价'] = str(budget_cost - final_cost)
+                    
+                    # 添加项目
+                    db_add_item(item, category)
+                    success_count += 1
+                except Exception as e:
+                    error_count += 1
+                    errors.append(f'第{i}行: {str(e)}')
+            
+            if success_count > 0:
+                message = f'成功添加 {success_count} 项'
+                if error_count > 0:
+                    message += f'，失败 {error_count} 项'
+                return jsonify({
+                    'success': True,
+                    'message': message,
+                    'count': success_count,
+                    'total': len(lines),
+                    'errors': errors if errors else None
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': '所有项目添加失败',
+                    'errors': errors
+                }), 400
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500

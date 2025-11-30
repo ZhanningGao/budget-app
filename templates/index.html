@@ -220,6 +220,26 @@
             align-items: center;
         }
 
+        .category-toggle {
+            transition: transform 0.3s ease;
+            display: inline-block;
+        }
+
+        .category-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .category-content {
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            max-height: 10000px; /* 足够大的值 */
+        }
+
+        .category-content.collapsed {
+            max-height: 0;
+            overflow: hidden;
+        }
+
         .category-actions {
             display: flex;
             gap: 10px;
@@ -269,6 +289,24 @@
             border-bottom: 2px solid #dee2e6;
             white-space: nowrap;
             font-size: 13px;
+        }
+
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            transition: background-color 0.2s;
+        }
+
+        th.sortable:hover {
+            background: #e9ecef;
+        }
+
+        .sort-indicator {
+            display: inline-block;
+            margin-left: 4px;
+            color: #667eea;
+            font-weight: bold;
         }
 
         td {
@@ -983,6 +1021,7 @@
             <button class="btn btn-secondary" onclick="showImportModal()" style="background: #ffc107; color: #000;">📤 导入Excel</button>
             <button class="btn btn-secondary" onclick="exportFile()">📥 导出Excel</button>
             <button class="btn btn-secondary" onclick="exportPDF()" style="background: #dc3545;">📄 导出PDF</button>
+            <button class="btn btn-secondary" onclick="showBackupModal()" style="background: #28a745;">💾 备份/恢复</button>
             <div style="flex: 1;"></div>
             <span id="itemCount" style="color: #6c757d; font-weight: 500;">共 0 项</span>
         </div>
@@ -999,8 +1038,8 @@
                 <textarea 
                     id="aiInput" 
                     class="ai-input-textarea" 
-                    placeholder="例如：全屋基础装修，1套，预算24500元，实际花费24500元，备注：黄江工长，赵娅娜介绍"
-                    rows="2"></textarea>
+                    placeholder="例如：全屋基础装修，1套，预算24500元，实际花费24500元，备注：黄江工长，赵娅娜介绍&#10;支持批量添加，每行一个项目，用换行分隔"
+                    rows="4"></textarea>
                 <div class="ai-input-actions">
                     <button class="btn btn-primary" onclick="parseAndPreview()">🔍 解析预览</button>
                     <button class="btn btn-success" onclick="parseAndAdd()">✨ 直接添加</button>
@@ -1030,7 +1069,8 @@
                     <li>文件格式：.xlsx 或 .xls</li>
                     <li>必须包含分类行（以"一、"、"二、"等开头）</li>
                     <li>必须包含表头行（包含"序号"和"项目"列）</li>
-                    <li>导入前会自动备份当前文件</li>
+                    <li>⚠️ 导入将覆盖当前数据库中的所有数据</li>
+                    <li>建议先导出当前数据作为备份</li>
                 </ul>
             </div>
             <form id="importForm" enctype="multipart/form-data">
@@ -1083,7 +1123,7 @@
             <div style="padding: 20px;">
                 <div style="display: flex; flex-wrap: wrap; gap: 30px; justify-content: center;">
                     <div style="flex: 1; min-width: 300px; max-width: 400px;">
-                        <div style="text-align: center; font-weight: 600; margin-bottom: 15px; font-size: 16px;">2nd预算项目占比</div>
+                        <div style="text-align: center; font-weight: 600; margin-bottom: 15px; font-size: 16px;">预算费用项目占比</div>
                         <div style="display: flex; gap: 20px;">
                             <div style="flex: 1; max-width: 200px;">
                                 <canvas id="categoryBudgetChart"></canvas>
@@ -1092,7 +1132,7 @@
                         </div>
                     </div>
                     <div style="flex: 1; min-width: 300px; max-width: 400px;">
-                        <div style="text-align: center; font-weight: 600; margin-bottom: 15px; font-size: 16px;">实际花费项目占比</div>
+                        <div style="text-align: center; font-weight: 600; margin-bottom: 15px; font-size: 16px;">最终花费项目占比</div>
                         <div style="display: flex; gap: 20px;">
                             <div style="flex: 1; max-width: 200px;">
                                 <canvas id="categoryActualChart"></canvas>
@@ -1104,6 +1144,40 @@
             </div>
             <div class="modal-actions" style="padding: 15px; border-top: 1px solid #e9ecef;">
                 <button type="button" class="btn btn-secondary" onclick="closeCategoryChartModal()" style="width: 100%;">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 备份/恢复模态框 -->
+    <div id="backupModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2>数据库备份与恢复</h2>
+                <button type="button" class="close-btn" onclick="closeBackupModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <!-- 创建备份 -->
+                <div style="margin-bottom: 30px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <h3 style="margin-bottom: 15px; font-size: 16px;">创建备份</h3>
+                    <div style="display: flex; gap: 10px; align-items: flex-end;">
+                        <div style="flex: 1;">
+                            <label style="display: block; margin-bottom: 5px; font-size: 14px;">备份描述（可选）</label>
+                            <input type="text" id="backupDescription" placeholder="例如：重要更新前备份" style="width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 4px;">
+                        </div>
+                        <button class="btn btn-primary" onclick="createBackup()">💾 创建备份</button>
+                    </div>
+                    <small style="color: #6c757d; font-size: 12px; display: block; margin-top: 8px;">
+                        系统每24小时自动备份一次，最多保留20个备份
+                    </small>
+                </div>
+
+                <!-- 备份列表 -->
+                <div>
+                    <h3 style="margin-bottom: 15px; font-size: 16px;">备份列表</h3>
+                    <div id="backupList" style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; padding: 10px;">
+                        <div style="text-align: center; padding: 20px; color: #6c757d;">加载中...</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1155,24 +1229,27 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>1st 预算费用（元）</label>
-                        <input type="number" name="1st预算费用" step="0.01" placeholder="0.00">
+                        <label>预算费用（元）</label>
+                        <input type="number" name="预算费用" step="0.01" placeholder="0.00" oninput="calculateDiff()">
+                        <small style="color: #6c757d; font-size: 12px; margin-top: 5px; display: block;">
+                            合并1st和2nd预算
+                        </small>
                     </div>
                     <div class="form-group">
-                        <label>2nd 预算费用（元）</label>
-                        <input type="number" name="2nd预算费用" step="0.01" placeholder="默认等于1st预算" oninput="calculateDiff()">
+                        <label>当前投入（元）</label>
+                        <input type="number" name="当前投入" step="0.01" placeholder="默认0" oninput="calculateDiff()">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>最终实际花费（元）</label>
-                        <input type="number" name="最终实际花费" step="0.01" placeholder="默认0" oninput="calculateDiff()">
+                        <label>最终花费（元）</label>
+                        <input type="number" name="最终花费" step="0.01" placeholder="默认0" oninput="calculateDiff()">
                     </div>
                     <div class="form-group">
                         <label>差价（元）</label>
-                        <input type="text" name="差价" id="diffInput" placeholder="自动计算（2nd预算 - 实际花费）" readonly style="background: #f8f9fa;">
+                        <input type="text" name="差价" id="diffInput" placeholder="自动计算（预算费用 - 最终花费）" readonly style="background: #f8f9fa;">
                         <small style="color: #6c757d; font-size: 12px; margin-top: 5px; display: block;">
-                            差价 = 2nd预算 - 实际花费（自动计算）
+                            差价 = 预算费用 - 最终花费（自动计算）
                         </small>
                     </div>
                 </div>
@@ -1191,16 +1268,18 @@
 
     <script>
         // 密码验证相关
+        // 使用sessionStorage而不是localStorage，关闭标签页后验证状态自动失效
         const PASSWORD_STORAGE_KEY = 'budget_app_verified';
-        const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24小时
+        const SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟（同一标签页内有效）
 
         // 检查是否已通过验证
         function checkPasswordVerification() {
-            const verified = localStorage.getItem(PASSWORD_STORAGE_KEY);
+            // 使用sessionStorage，关闭标签页后自动失效
+            const verified = sessionStorage.getItem(PASSWORD_STORAGE_KEY);
             if (verified) {
                 const timestamp = parseInt(verified);
                 const now = Date.now();
-                // 检查是否在有效期内（24小时）
+                // 检查是否在有效期内（30分钟内）
                 if (now - timestamp < SESSION_TIMEOUT) {
                     // 验证通过，显示主界面
                     document.getElementById('passwordModal').style.display = 'none';
@@ -1208,7 +1287,7 @@
                     return true;
                 } else {
                     // 超时，清除验证
-                    localStorage.removeItem(PASSWORD_STORAGE_KEY);
+                    sessionStorage.removeItem(PASSWORD_STORAGE_KEY);
                 }
             }
             // 未验证，显示密码输入框
@@ -1239,8 +1318,8 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    // 验证成功，保存验证状态
-                    localStorage.setItem(PASSWORD_STORAGE_KEY, Date.now().toString());
+                    // 验证成功，保存验证状态到sessionStorage（关闭标签页后失效）
+                    sessionStorage.setItem(PASSWORD_STORAGE_KEY, Date.now().toString());
                     // 隐藏密码框，显示主界面
                     document.getElementById('passwordModal').style.display = 'none';
                     document.getElementById('mainContainer').style.display = 'block';
@@ -1278,6 +1357,7 @@
         })();
 
         let categories = [];
+        let categoryMap = {};  // 分类名 -> ID映射
         let items = [];
         let editingItemId = null;
         let budgetChart = null;
@@ -1504,8 +1584,15 @@
             
             categoryItems.forEach(item => {
                 const itemName = item['项目'] || '未命名项目';
-                const budget = parseFloat(item['2nd预算费用']) || 0;
-                const actual = parseFloat(item['最终实际花费']) || 0;
+                // 兼容旧格式
+                const val1st = parseFloat(item['1st预算费用']) || 0;
+                const val2nd = parseFloat(item['2nd预算费用']) || 0;
+                const budget = parseFloat(item['预算费用']) || (val2nd > 0 ? val2nd : val1st);
+                let actual = parseFloat(item['最终花费']) || parseFloat(item['最终实际花费']) || 0;
+                // 如果最终花费等于预算（可能是错误数据），重置为0
+                if (actual === budget && actual > 0) {
+                    actual = 0;
+                }
                 
                 if (!itemBudget[itemName]) {
                     itemBudget[itemName] = 0;
@@ -1713,15 +1800,79 @@
             '项目': '项目名称',
             '单位': '单位',
             '预算数量': '数量',
-            '1st预算费用': '1st预算',
-            '最终实际花费': '实际花费',
-            '2nd预算费用': '2nd预算',
+            '预算费用': '预算费用',
+            '当前投入': '当前投入',
+            '最终花费': '最终花费',
             '差价': '差价',
             '备注': '备注'
         };
 
+        // 保存和恢复页面状态
+        function savePageState() {
+            // 保存滚动位置
+            const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+            sessionStorage.setItem('pageScrollY', scrollY.toString());
+            
+            // 保存折叠状态
+            const collapsedCategories = [];
+            document.querySelectorAll('.category-section').forEach(section => {
+                const content = section.querySelector('.category-content');
+                if (content && content.classList.contains('collapsed')) {
+                    const category = section.dataset.category;
+                    if (category) {
+                        collapsedCategories.push(category);
+                    }
+                }
+            });
+            sessionStorage.setItem('collapsedCategories', JSON.stringify(collapsedCategories));
+        }
+
+        function restorePageState() {
+            // 恢复折叠状态（先恢复，因为会影响滚动位置）
+            const collapsedCategoriesStr = sessionStorage.getItem('collapsedCategories');
+            if (collapsedCategoriesStr) {
+                try {
+                    const collapsedCategories = JSON.parse(collapsedCategoriesStr);
+                    collapsedCategories.forEach(category => {
+                        const categorySection = document.querySelector(`.category-section[data-category="${category}"]`);
+                        if (categorySection) {
+                            const content = categorySection.querySelector('.category-content');
+                            const toggle = categorySection.querySelector('.category-toggle');
+                            if (content && toggle) {
+                                content.classList.add('collapsed');
+                                toggle.classList.add('collapsed');
+                                toggle.textContent = '▶';
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error('恢复折叠状态失败:', e);
+                }
+            }
+            
+            // 恢复滚动位置（延迟执行，确保DOM已完全渲染）
+            const savedScrollY = sessionStorage.getItem('pageScrollY');
+            if (savedScrollY) {
+                // 多次尝试恢复滚动位置，确保成功
+                setTimeout(() => {
+                    window.scrollTo(0, parseInt(savedScrollY));
+                }, 50);
+                setTimeout(() => {
+                    window.scrollTo(0, parseInt(savedScrollY));
+                }, 200);
+                setTimeout(() => {
+                    window.scrollTo(0, parseInt(savedScrollY));
+                }, 500);
+            }
+        }
+
         // 加载数据
-        async function loadData() {
+        async function loadData(preserveState = true) {
+            // 保存当前页面状态（在清空内容之前）
+            if (preserveState) {
+                savePageState();
+            }
+            
             const loading = document.getElementById('loading');
             const contentContainer = document.getElementById('contentContainer');
             
@@ -1734,10 +1885,17 @@
 
                 if (result.success) {
                     categories = result.categories || [];
+                    categoryMap = result.category_map || {};  // 保存分类ID映射
                     items = result.items || [];
                     renderContent();
                     updateCategorySelect();
-                    showMessage('数据加载成功', 'success');
+                    
+                    // 恢复页面状态（延迟执行，确保DOM已渲染）
+                    if (preserveState) {
+                        setTimeout(() => {
+                            restorePageState();
+                        }, 100);
+                    }
                 } else {
                     showMessage('加载失败: ' + result.error, 'error');
                 }
@@ -1773,33 +1931,45 @@
                 itemsByCategory[cat].push(item);
             });
 
-            // 渲染每个分类
-            categories.forEach(category => {
+            // 渲染每个分类（排除"未分类"）
+            categories.filter(cat => cat !== '未分类').forEach(category => {
                 const categoryItems = itemsByCategory[category] || [];
                 // 即使没有项目也显示分类（允许添加项目）
+                const categoryId = categoryMap[category];
 
-                html += `<div class="category-section" data-category="${escapeHtml(category)}">`;
-                html += `<div class="category-header" style="cursor: pointer;" onclick="showCategoryChart('${escapeHtml(category)}')" title="点击查看分类项目占比">`;
+                html += `<div class="category-section" data-category="${escapeHtml(category)}" data-category-id="${categoryId || ''}">`;
+                html += `<div class="category-header">`;
+                html += `<div style="flex: 1; display: flex; align-items: center; gap: 8px;">`;
+                html += `<span class="category-toggle" onclick="toggleCategory('${escapeHtml(category)}', event)" title="点击折叠/展开" style="cursor: pointer; font-size: 16px; user-select: none;">▼</span>`;
+                html += `<div style="flex: 1; cursor: pointer;" onclick="showCategoryChart('${escapeHtml(category)}')" title="点击查看分类项目占比">`;
                 html += `<span>${escapeHtml(category)}</span>`;
-                html += `<span style="font-size: 14px; opacity: 0.9;">${categoryItems.length} 项 📊</span>`;
+                html += `<span style="font-size: 14px; opacity: 0.9; margin-left: 8px;">${categoryItems.length} 项 📊</span>`;
                 html += `</div>`;
+                html += `</div>`;
+                // 添加删除分类按钮
+                if (categoryId) {
+                    html += `<button class="btn-delete-category" onclick="deleteCategory('${escapeHtml(category)}', ${categoryId}, event)" title="删除分类" style="background: #dc3545; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px;">🗑️ 删除</button>`;
+                }
+                html += `</div>`;
+                html += `<div class="category-content">`;
                 html += `<div class="table-wrapper">`;
                 html += `<table><thead><tr>`;
                 html += `<th class="checkbox-cell"><input type="checkbox" class="category-select-all" onchange="toggleCategorySelectAll('${escapeHtml(category)}', this.checked)"></th>`;
                 html += `<th>序号</th>`;
-                html += `<th>项目名称</th>`;
-                html += `<th class="number-cell">1st预算</th>`;
-                html += `<th class="number-cell">2nd预算</th>`;
-                html += `<th class="number-cell">实际花费</th>`;
-                html += `<th class="number-cell">差价</th>`;
+                html += `<th class="sortable" data-sort-field="项目" data-category="${escapeHtml(category)}" onclick="sortItems('${escapeHtml(category)}', '项目', this)">项目名称 <span class="sort-indicator"></span></th>`;
+                html += `<th class="number-cell sortable" data-sort-field="预算费用" data-category="${escapeHtml(category)}" onclick="sortItems('${escapeHtml(category)}', '预算费用', this)">预算费用 <span class="sort-indicator"></span></th>`;
+                html += `<th class="number-cell sortable" data-sort-field="当前投入" data-category="${escapeHtml(category)}" onclick="sortItems('${escapeHtml(category)}', '当前投入', this)">当前投入 <span class="sort-indicator"></span></th>`;
+                html += `<th class="number-cell sortable" data-sort-field="最终花费" data-category="${escapeHtml(category)}" onclick="sortItems('${escapeHtml(category)}', '最终花费', this)">最终花费 <span class="sort-indicator"></span></th>`;
+                html += `<th class="number-cell sortable" data-sort-field="差价" data-category="${escapeHtml(category)}" onclick="sortItems('${escapeHtml(category)}', '差价', this)">差价 <span class="sort-indicator"></span></th>`;
                 html += `<th>单位</th>`;
                 html += `<th>数量</th>`;
                 html += `<th>备注</th>`;
                 html += `<th class="action-cell desktop-only">操作</th>`;
                 html += `</tr></thead><tbody>`;
 
-                let categoryTotal2nd = 0;
-                let categoryTotalActual = 0;
+                let categoryTotalBudget = 0;
+                let categoryTotalCurrent = 0;
+                let categoryTotalFinal = 0;
                 let categoryTotalDiff = 0;
                 
                 if (categoryItems.length === 0) {
@@ -1807,22 +1977,32 @@
                     html += `<tr><td colspan="11" style="text-align: center; padding: 40px; color: #6c757d;">暂无项目，点击"添加项目"开始添加</td></tr>`;
                 } else {
                     categoryItems.forEach(item => {
+                        // 兼容旧格式
+                        const val1st = parseFloat(item['1st预算费用']) || 0;
                         const val2nd = parseFloat(item['2nd预算费用']) || 0;
-                        const valActual = parseFloat(item['最终实际花费']) || 0;
-                        const valDiff = parseFloat(item['差价']) || 0;
+                        const valBudget = parseFloat(item['预算费用']) || (val2nd > 0 ? val2nd : val1st);
+                        const valCurrent = parseFloat(item['当前投入']) || parseFloat(item['最终实际花费']) || 0;
+                        // 确保最终花费默认为0，不能等于预算
+                        let valFinal = parseFloat(item['最终花费']) || 0;
+                        // 如果最终花费等于预算（可能是错误数据），重置为0
+                        if (valFinal === valBudget && valFinal > 0) {
+                            valFinal = 0;
+                        }
+                        const valDiff = valBudget - valFinal;
                         
-                        categoryTotal2nd += val2nd;
-                        categoryTotalActual += valActual;
+                        categoryTotalBudget += valBudget;
+                        categoryTotalCurrent += valCurrent;
+                        categoryTotalFinal += valFinal;
                         categoryTotalDiff += valDiff;
                         
                         html += `<tr data-item-id="${item.id}" data-category="${escapeHtml(category)}">`;
                         html += `<td class="checkbox-cell"><input type="checkbox" class="row-checkbox" onchange="updateDeleteButton()"></td>`;
                         html += `<td>${item['序号'] || ''}</td>`;
                         html += `<td><strong>${escapeHtml(item['项目'] || '')}</strong></td>`;
-                        html += `<td class="number-cell">${formatNumber(item['1st预算费用'])}</td>`;
-                        html += `<td class="number-cell">${formatNumber(item['2nd预算费用'])}</td>`;
-                        html += `<td class="number-cell"><strong>${formatNumber(item['最终实际花费'])}</strong></td>`;
-                        html += `<td class="number-cell">${formatNumber(item['差价'])}</td>`;
+                        html += `<td class="number-cell">${formatNumber(valBudget)}</td>`;
+                        html += `<td class="number-cell">${formatNumber(valCurrent)}</td>`;
+                        html += `<td class="number-cell"><strong>${formatNumber(valFinal)}</strong></td>`;
+                        html += `<td class="number-cell">${formatNumber(valDiff)}</td>`;
                         html += `<td>${escapeHtml(item['单位'] || '')}</td>`;
                         html += `<td>${escapeHtml(item['预算数量'] || '')}</td>`;
                         html += `<td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item['备注'] || '')}">${escapeHtml(item['备注'] || '')}</td>`;
@@ -1834,67 +2014,60 @@
                 html += `</tbody></table>`;
                 html += `<div class="summary">`;
                 html += `<span>本分类合计：`;
-                html += `2nd预算 <strong>${formatNumber(categoryTotal2nd)}</strong> 元 | `;
-                html += `实际花费 <strong>${formatNumber(categoryTotalActual)}</strong> 元 | `;
+                html += `预算费用 <strong>${formatNumber(categoryTotalBudget)}</strong> 元 | `;
+                html += `当前投入 <strong>${formatNumber(categoryTotalCurrent)}</strong> 元 | `;
+                html += `最终花费 <strong>${formatNumber(categoryTotalFinal)}</strong> 元 | `;
                 html += `差价 <strong>${formatNumber(categoryTotalDiff)}</strong> 元`;
                 html += `</span>`;
                 html += `</div>`;
-                html += `</div></div>`;
+                html += `</div></div></div>`;
             });
 
-            // 渲染未分类项目
-            const uncategorized = itemsByCategory['未分类'] || [];
-            if (uncategorized.length > 0) {
-                html += `<div class="category-section"><div class="category-header" style="cursor: pointer;" onclick="showCategoryChart('未分类')" title="点击查看分类项目占比"><span>未分类</span><span style="font-size: 14px; opacity: 0.9;">${uncategorized.length} 项 📊</span></div>`;
-                html += `<div class="table-wrapper"><table><thead><tr>`;
-                html += `<th class="checkbox-cell"><input type="checkbox" class="category-select-all" onchange="toggleCategorySelectAll('未分类', this.checked)"></th>`;
-                html += `<th class="checkbox-cell"><input type="checkbox" class="category-select-all" onchange="toggleCategorySelectAll('未分类', this.checked)"></th>`;
-                html += `<th>序号</th><th>项目名称</th>`;
-                html += `<th class="number-cell">1st预算</th><th class="number-cell">2nd预算</th><th class="number-cell">实际花费</th><th class="number-cell">差价</th>`;
-                html += `<th>单位</th><th>数量</th>`;
-                html += `<th>备注</th><th class="action-cell desktop-only">操作</th>`;
-                html += `</tr></thead><tbody>`;
-                uncategorized.forEach(item => {
-                    html += `<tr data-item-id="${item.id}" data-category="未分类">`;
-                    html += `<td class="checkbox-cell"><input type="checkbox" class="row-checkbox" onchange="updateDeleteButton()"></td>`;
-                    html += `<td>${item['序号'] || ''}</td>`;
-                    html += `<td><strong>${escapeHtml(item['项目'] || '')}</strong></td>`;
-                    html += `<td class="number-cell">${formatNumber(item['1st预算费用'])}</td>`;
-                    html += `<td class="number-cell">${formatNumber(item['2nd预算费用'])}</td>`;
-                    html += `<td class="number-cell"><strong>${formatNumber(item['最终实际花费'])}</strong></td>`;
-                    html += `<td class="number-cell">${formatNumber(item['差价'])}</td>`;
-                    html += `<td>${escapeHtml(item['单位'] || '')}</td>`;
-                    html += `<td>${escapeHtml(item['预算数量'] || '')}</td>`;
-                    html += `<td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item['备注'] || '')}">${escapeHtml(item['备注'] || '')}</td>`;
-                    html += `<td class="action-cell desktop-only"><button class="btn btn-primary btn-small" onclick="event.stopPropagation(); editItem(${item.id})">编辑</button></td>`;
-                    html += `</tr>`;
-                });
-                html += `</tbody></table></div></div>`;
-            }
+            // 不再渲染未分类项目（已剔除）
 
-            // 计算总合计
-            let grandTotal2nd = 0;
-            let grandTotalActual = 0;
+            // 计算总合计（兼容旧格式）
+            let grandTotalBudget = 0;
+            let grandTotalCurrent = 0;
+            let grandTotalFinal = 0;
             let grandTotalDiff = 0;
             
             items.forEach(item => {
+                const val1st = parseFloat(item['1st预算费用']) || 0;
                 const val2nd = parseFloat(item['2nd预算费用']) || 0;
-                const valActual = parseFloat(item['最终实际花费']) || 0;
-                const valDiff = parseFloat(item['差价']) || 0;
+                const valBudget = parseFloat(item['预算费用']) || (val2nd > 0 ? val2nd : val1st);
+                const valCurrent = parseFloat(item['当前投入']) || parseFloat(item['最终实际花费']) || 0;
+                // 确保最终花费默认为0，不能等于预算
+                let valFinal = parseFloat(item['最终花费']) || 0;
+                // 如果最终花费等于预算（可能是错误数据），重置为0
+                if (valFinal === valBudget && valFinal > 0) {
+                    valFinal = 0;
+                }
+                const valDiff = parseFloat(item['差价']) || (valBudget - valFinal);
                 
-                grandTotal2nd += val2nd;
-                grandTotalActual += valActual;
+                grandTotalBudget += valBudget;
+                grandTotalCurrent += valCurrent;
+                grandTotalFinal += valFinal;
                 grandTotalDiff += valDiff;
             });
 
-            // 计算各分类的预算和实际花费
+            // 计算各分类的预算和实际花费（用于饼图）
             const categoryBudget = {};
             const categoryActual = {};
             
             items.forEach(item => {
                 const cat = item.category || '未分类';
-                const budget = parseFloat(item['2nd预算费用']) || 0;
-                const actual = parseFloat(item['最终实际花费']) || 0;
+                // 跳过未分类项目，不显示在饼图中
+                if (cat === '未分类') {
+                    return;
+                }
+                const val1st = parseFloat(item['1st预算费用']) || 0;
+                const val2nd = parseFloat(item['2nd预算费用']) || 0;
+                const budget = parseFloat(item['预算费用']) || (val2nd > 0 ? val2nd : val1st);
+                let actual = parseFloat(item['最终花费']) || parseFloat(item['最终实际花费']) || 0;
+                // 如果最终花费等于预算（可能是错误数据），重置为0
+                if (actual === budget && actual > 0) {
+                    actual = 0;
+                }
                 
                 if (!categoryBudget[cat]) {
                     categoryBudget[cat] = 0;
@@ -1913,20 +2086,41 @@
             totalHtml += `<div class="summary" style="padding: 20px; font-size: 16px; text-align: center;">`;
             totalHtml += `<div style="font-weight: 600; margin-bottom: 10px;">总合计</div>`;
             totalHtml += `<div style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; align-items: center;">`;
-            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">2nd预算</div><strong style="color: #667eea; font-size: 20px;">${formatNumber(grandTotal2nd)}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
-            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">实际花费</div><strong style="color: #28a745; font-size: 20px;">${formatNumber(grandTotalActual)}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
+            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">预算费用</div><strong style="color: #667eea; font-size: 20px;">${formatNumber(grandTotalBudget)}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
+            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">当前投入</div><strong style="color: #ff9800; font-size: 20px;">${formatNumber(grandTotalCurrent)}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
+            totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">最终花费</div><strong style="color: #28a745; font-size: 20px;">${formatNumber(grandTotalFinal)}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
             totalHtml += `<div style="text-align: center;"><div style="font-size: 12px; color: #6c757d; margin-bottom: 5px;">差价</div><strong style="color: ${grandTotalDiff >= 0 ? '#28a745' : '#dc3545'}; font-size: 20px;">${formatNumber(grandTotalDiff)}</strong><span style="font-size: 12px; color: #6c757d;"> 元</span></div>`;
             totalHtml += `</div>`;
+            
+            // 添加预算进度条
+            if (grandTotalBudget > 0) {
+                const progressPercent = Math.min((grandTotalCurrent / grandTotalBudget) * 100, 100);
+                const progressColor = progressPercent > 100 ? '#dc3545' : (progressPercent > 80 ? '#ff9800' : '#28a745');
+                totalHtml += `<div style="margin-top: 20px; padding: 0 10px;">`;
+                totalHtml += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">`;
+                totalHtml += `<span style="font-size: 13px; color: #6c757d; font-weight: 500;">预算进度</span>`;
+                totalHtml += `<span style="font-size: 13px; color: #333; font-weight: 600;">${progressPercent.toFixed(1)}%</span>`;
+                totalHtml += `</div>`;
+                totalHtml += `<div style="width: 100%; height: 24px; background: #e9ecef; border-radius: 12px; overflow: hidden; position: relative; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">`;
+                totalHtml += `<div style="width: ${progressPercent}%; height: 100%; background: linear-gradient(90deg, ${progressColor} 0%, ${progressColor}dd 100%); border-radius: 12px; transition: width 0.3s ease; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">`;
+                if (progressPercent > 15) {
+                    totalHtml += `<span style="color: white; font-size: 11px; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${formatNumber(grandTotalCurrent)} / ${formatNumber(grandTotalBudget)}</span>`;
+                }
+                totalHtml += `</div>`;
+                totalHtml += `</div>`;
+                totalHtml += `</div>`;
+            }
+            
             totalHtml += `</div>`;
             
             // 添加饼图容器
             totalHtml += `<div style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; padding: 20px; background: white;">`;
             totalHtml += `<div style="flex: 1; min-width: 300px; max-width: 400px;">`;
-            totalHtml += `<div style="text-align: center; font-weight: 600; margin-bottom: 10px; font-size: 16px;">2nd预算分类占比</div>`;
+            totalHtml += `<div style="text-align: center; font-weight: 600; margin-bottom: 10px; font-size: 16px;">预算费用分类占比</div>`;
             totalHtml += `<canvas id="budgetChart" style="max-width: 100%; height: auto;"></canvas>`;
             totalHtml += `</div>`;
             totalHtml += `<div style="flex: 1; min-width: 300px; max-width: 400px;">`;
-            totalHtml += `<div style="text-align: center; font-weight: 600; margin-bottom: 10px; font-size: 16px;">实际花费分类占比</div>`;
+            totalHtml += `<div style="text-align: center; font-weight: 600; margin-bottom: 10px; font-size: 16px;">最终花费分类占比</div>`;
             totalHtml += `<canvas id="actualChart" style="max-width: 100%; height: auto;"></canvas>`;
             totalHtml += `</div>`;
             totalHtml += `</div>`;
@@ -1996,21 +2190,56 @@
             document.querySelector('[name="项目"]').value = item['项目'] || '';
             document.querySelector('[name="单位"]').value = item['单位'] || '';
             document.querySelector('[name="预算数量"]').value = item['预算数量'] || '';
-            document.querySelector('[name="1st预算费用"]').value = item['1st预算费用'] || '';
-            document.querySelector('[name="最终实际花费"]').value = item['最终实际花费'] || '';
-            document.querySelector('[name="2nd预算费用"]').value = item['2nd预算费用'] || '';
+            // 兼容旧格式：优先使用新字段，否则合并1st和2nd
+            const val1st = parseFloat(item['1st预算费用']) || 0;
+            const val2nd = parseFloat(item['2nd预算费用']) || 0;
+            const valBudget = parseFloat(item['预算费用']) || (val2nd > 0 ? val2nd : val1st);
+            
+            // 当前投入：优先使用新字段，否则使用旧字段"最终实际花费"
+            // 但要确保不等于预算费用（可能是错误数据）
+            let valCurrent = 0;
+            if (item['当前投入'] && item['当前投入'] !== '') {
+                valCurrent = parseFloat(item['当前投入']) || 0;
+            } else if (item['最终实际花费'] && item['最终实际花费'] !== '') {
+                const valOldActual = parseFloat(item['最终实际花费']) || 0;
+                // 如果旧的实际花费等于预算，说明可能是错误数据，设为0
+                if (Math.abs(valOldActual - valBudget) > 0.01 || valBudget === 0) {
+                    valCurrent = valOldActual;
+                }
+            }
+            
+            // 确保最终花费默认为0，不能等于预算
+            let valFinal = parseFloat(item['最终花费']) || 0;
+            // 如果最终花费等于预算（可能是错误数据），重置为0
+            if (valFinal === valBudget && valFinal > 0) {
+                valFinal = 0;
+            }
+            // 填充表单字段（0值也要显示，不能转为空字符串）
+            const budgetField = document.querySelector('[name="预算费用"]');
+            const currentField = document.querySelector('[name="当前投入"]');
+            const finalField = document.querySelector('[name="最终花费"]');
+            const remarkField = document.querySelector('[name="备注"]');
+            
+            // 使用Number.isNaN检查，确保0值也能正确显示
+            if (budgetField) budgetField.value = (!isNaN(valBudget) && valBudget !== null) ? valBudget : '';
+            if (currentField) currentField.value = (!isNaN(valCurrent) && valCurrent !== null) ? valCurrent : '';
+            if (finalField) finalField.value = (!isNaN(valFinal) && valFinal !== null) ? valFinal : '';
+            if (remarkField) remarkField.value = item['备注'] || '';
+            
             // 自动计算差价
             calculateDiff();
-            document.querySelector('[name="备注"]').value = item['备注'] || '';
+            
+            // 显示删除按钮（编辑模式）
+            document.getElementById('deleteItemBtn').style.display = 'inline-block';
             
             document.getElementById('itemModal').classList.add('active');
         }
 
         // 计算差价
         function calculateDiff() {
-            const val2nd = parseFloat(document.querySelector('[name="2nd预算费用"]').value) || 0;
-            const valActual = parseFloat(document.querySelector('[name="最终实际花费"]').value) || 0;
-            const diff = val2nd - valActual;
+            const valBudget = parseFloat(document.querySelector('[name="预算费用"]').value) || 0;
+            const valFinal = parseFloat(document.querySelector('[name="最终花费"]').value) || 0;
+            const diff = valBudget - valFinal;
             const diffInput = document.getElementById('diffInput');
             if (diffInput) {
                 diffInput.value = Math.round(diff);
@@ -2077,18 +2306,29 @@
 
             title.textContent = item['项目'] || '项目详情';
 
-            // 构建详情内容，字段顺序：项目名称、1st预算、2nd预算、实际花费、差价、单位、数量、备注
+            // 构建详情内容，字段顺序：项目名称、预算费用、当前投入、最终花费、差价、单位、数量、备注
+            // 兼容旧格式
+            const val1st = parseFloat(item['1st预算费用']) || 0;
+            const val2nd = parseFloat(item['2nd预算费用']) || 0;
+            const valBudget = parseFloat(item['预算费用']) || (val2nd > 0 ? val2nd : val1st);
+            const valCurrent = parseFloat(item['当前投入']) || parseFloat(item['最终实际花费']) || 0;
+            let valFinal = parseFloat(item['最终花费']) || 0;
+            // 如果最终花费等于预算（可能是错误数据），重置为0
+            if (valFinal === valBudget && valFinal > 0) {
+                valFinal = 0;
+            }
+            const valDiff = valBudget - valFinal;
+            
             let html = '';
             html += `<div class="mobile-detail-item"><span class="mobile-detail-label">项目名称</span><span class="mobile-detail-value">${escapeHtml(item['项目'] || '-')}</span></div>`;
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">1st预算</span><span class="mobile-detail-value">${formatNumber(item['1st预算费用'])} 元</span></div>`;
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">2nd预算</span><span class="mobile-detail-value">${formatNumber(item['2nd预算费用'])} 元</span></div>`;
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">实际花费</span><span class="mobile-detail-value">${formatNumber(item['最终实际花费'])} 元</span></div>`;
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">差价</span><span class="mobile-detail-value" style="color: ${parseFloat(item['差价'] || 0) >= 0 ? '#28a745' : '#dc3545'};">${formatNumber(item['差价'])} 元</span></div>`;
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">预算费用</span><span class="mobile-detail-value">${formatNumber(valBudget)} 元</span></div>`;
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">当前投入</span><span class="mobile-detail-value">${formatNumber(valCurrent)} 元</span></div>`;
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">最终花费</span><span class="mobile-detail-value">${formatNumber(valFinal)} 元</span></div>`;
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">差价</span><span class="mobile-detail-value" style="color: ${valDiff >= 0 ? '#28a745' : '#dc3545'};">${formatNumber(valDiff)} 元</span></div>`;
             html += `<div class="mobile-detail-item"><span class="mobile-detail-label">单位</span><span class="mobile-detail-value">${escapeHtml(item['单位'] || '-')}</span></div>`;
             html += `<div class="mobile-detail-item"><span class="mobile-detail-label">数量</span><span class="mobile-detail-value">${escapeHtml(item['预算数量'] || '-')}</span></div>`;
-            if (item['备注']) {
-                html += `<div class="mobile-detail-item"><span class="mobile-detail-label">备注</span><span class="mobile-detail-value" style="text-align: left; white-space: normal; word-break: break-word;">${escapeHtml(item['备注'])}</span></div>`;
-            }
+            // 备注始终显示，即使为空也显示
+            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">备注</span><span class="mobile-detail-value" style="text-align: left; white-space: normal; word-break: break-word;">${escapeHtml(item['备注'] || '-')}</span></div>`;
 
             detailContent.innerHTML = html;
             document.getElementById('itemDetailModal').classList.add('active');
@@ -2176,17 +2416,17 @@
             const category = formData.get('category');
             
             // 自动计算差价
-            const val2nd = parseFloat(formData.get('2nd预算费用')) || 0;
-            const valActual = parseFloat(formData.get('最终实际花费')) || 0;
-            const diff = val2nd - valActual;
+            const valBudget = parseFloat(formData.get('预算费用')) || 0;
+            const valFinal = parseFloat(formData.get('最终花费')) || 0;
+            const diff = valBudget - valFinal;
             
             const item = {
                 '项目': formData.get('项目'),
                 '单位': formData.get('单位'),
                 '预算数量': formData.get('预算数量'),
-                '1st预算费用': formData.get('1st预算费用'),
-                '最终实际花费': formData.get('最终实际花费'),
-                '2nd预算费用': formData.get('2nd预算费用'),
+                '预算费用': formData.get('预算费用'),
+                '当前投入': formData.get('当前投入'),
+                '最终花费': formData.get('最终花费'),
                 '差价': Math.round(diff),
                 '备注': formData.get('备注')
             };
@@ -2399,9 +2639,9 @@
 
         // 格式化数字
         function formatNumber(value) {
-            if (!value || value === '' || value === 'nan') return '-';
+            if (!value || value === '' || value === 'nan') return '0';
             const num = parseFloat(value);
-            if (isNaN(num)) return value;
+            if (isNaN(num)) return '0';
             // 显示为整数，不带小数点
             return Math.round(num).toLocaleString('zh-CN');
         }
@@ -2430,13 +2670,20 @@
                 if (result.success && result.item) {
                     const item = result.item;
                     let html = '<div style="margin-bottom: 10px; font-weight: 600; color: #495057;">解析结果：</div>';
+                    // 兼容新旧字段名
+                    const val1st = parseFloat(item['1st预算费用'] || 0) || 0;
+                    const val2nd = parseFloat(item['2nd预算费用'] || 0) || 0;
+                    const valBudget = parseFloat(item['预算费用'] || 0) || (val2nd > 0 ? val2nd : val1st);
+                    const valCurrent = parseFloat(item['当前投入'] || 0) || parseFloat(item['最终实际花费'] || 0) || 0;
+                    const valFinal = parseFloat(item['最终花费'] || 0) || 0;
+                    
                     html += '<div class="ai-preview-item"><span class="ai-preview-label">分类：</span><span class="ai-preview-value">' + escapeHtml(item.category || '未分类') + '</span></div>';
                     html += '<div class="ai-preview-item"><span class="ai-preview-label">项目名称：</span><span class="ai-preview-value">' + escapeHtml(item['项目'] || '') + '</span></div>';
                     html += '<div class="ai-preview-item"><span class="ai-preview-label">单位：</span><span class="ai-preview-value">' + escapeHtml(item['单位'] || '-') + '</span></div>';
                     html += '<div class="ai-preview-item"><span class="ai-preview-label">数量：</span><span class="ai-preview-value">' + escapeHtml(item['预算数量'] || '-') + '</span></div>';
-                    html += '<div class="ai-preview-item"><span class="ai-preview-label">1st预算：</span><span class="ai-preview-value">' + formatNumber(item['1st预算费用']) + '</span></div>';
-                    html += '<div class="ai-preview-item"><span class="ai-preview-label">2nd预算：</span><span class="ai-preview-value">' + formatNumber(item['2nd预算费用']) + '</span></div>';
-                    html += '<div class="ai-preview-item"><span class="ai-preview-label">实际花费：</span><span class="ai-preview-value">' + formatNumber(item['最终实际花费']) + '</span></div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">预算费用：</span><span class="ai-preview-value">' + formatNumber(valBudget) + '</span></div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">当前投入：</span><span class="ai-preview-value">' + formatNumber(valCurrent) + '</span></div>';
+                    html += '<div class="ai-preview-item"><span class="ai-preview-label">最终花费：</span><span class="ai-preview-value">' + formatNumber(valFinal) + '</span></div>';
                     html += '<div class="ai-preview-item"><span class="ai-preview-label">备注：</span><span class="ai-preview-value">' + escapeHtml(item['备注'] || '-') + '</span></div>';
                     html += '<div class="ai-preview-actions">';
                     html += '<button class="btn btn-secondary btn-small" onclick="closePreview()">取消</button>';
@@ -2470,19 +2717,30 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    showMessage(result.message, 'success');
+                    let message = result.message || '添加成功';
+                    if (result.count && result.count > 1) {
+                        message = `成功添加 ${result.count} 项`;
+                        if (result.errors && result.errors.length > 0) {
+                            message += `，失败 ${result.errors.length} 项`;
+                        }
+                    }
+                    showMessage(message, result.count === result.total ? 'success' : 'error');
                     document.getElementById('aiInput').value = '';
                     document.getElementById('aiPreview').style.display = 'none';
                     loadData();
                 } else {
-                    showMessage('添加失败: ' + (result.error || '未知错误'), 'error');
+                    let errorMsg = result.error || '未知错误';
+                    if (result.errors && result.errors.length > 0) {
+                        errorMsg += ': ' + result.errors.join('; ');
+                    }
+                    showMessage('添加失败: ' + errorMsg, 'error');
                 }
             } catch (error) {
                 showMessage('添加失败: ' + error.message, 'error');
             }
         }
 
-        // 确认从预览添加
+        // 确认从预览添加（单个项目）
         async function confirmAddFromPreview() {
             const preview = document.getElementById('aiPreview');
             if (!preview.dataset.parsedItem) {
@@ -2516,6 +2774,68 @@
                 }
             } catch (error) {
                 showMessage('添加失败: ' + error.message, 'error');
+            }
+        }
+
+        // 批量确认添加
+        async function confirmBatchAddFromPreview() {
+            const preview = document.getElementById('aiPreview');
+            if (!preview.dataset.parsedItems) {
+                showMessage('没有可添加的数据', 'error');
+                return;
+            }
+            
+            const items = JSON.parse(preview.dataset.parsedItems);
+            if (!items || items.length === 0) {
+                showMessage('没有可添加的数据', 'error');
+                return;
+            }
+            
+            // 批量添加
+            let successCount = 0;
+            let errorCount = 0;
+            const errors = [];
+            
+            for (let i = 0; i < items.length; i++) {
+                const itemData = items[i];
+                const category = itemData.category || '';
+                
+                // 从itemData中移除category
+                const item = { ...itemData };
+                delete item.category;
+                
+                try {
+                    const response = await fetch('/api/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ item, category })
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                        errors.push(`项目${i + 1}: ${result.error || '添加失败'}`);
+                    }
+                } catch (error) {
+                    errorCount++;
+                    errors.push(`项目${i + 1}: ${error.message}`);
+                }
+            }
+            
+            if (successCount > 0) {
+                let message = `成功添加 ${successCount} 项`;
+                if (errorCount > 0) {
+                    message += `，失败 ${errorCount} 项`;
+                }
+                showMessage(message, successCount === items.length ? 'success' : 'error');
+                document.getElementById('aiInput').value = '';
+                preview.style.display = 'none';
+                loadData();
+            } else {
+                showMessage('所有项目添加失败', 'error');
             }
         }
 
@@ -2566,6 +2886,189 @@
             }
         });
 
+        // 删除分类
+        async function deleteCategory(categoryName, categoryId, event) {
+            if (event) {
+                event.stopPropagation();  // 阻止触发分类图表的点击事件
+            }
+            
+            // 统计该分类下的项目数量
+            const categoryItems = items.filter(item => item.category === categoryName);
+            const itemCount = categoryItems.length;
+            
+            let confirmMessage = `确定要删除分类"${categoryName}"吗？`;
+            if (itemCount > 0) {
+                confirmMessage += `\n该分类下有 ${itemCount} 个项目，删除分类后这些项目将变为"未分类"。`;
+            }
+            confirmMessage += '\n\n此操作不可恢复！';
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            // 第二次确认
+            if (!confirm(`请再次确认：确定要删除分类"${categoryName}"吗？`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/delete-category', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category_id: categoryId })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    loadData();
+                } else {
+                    showMessage('删除失败: ' + (result.error || '未知错误'), 'error');
+                }
+            } catch (error) {
+                showMessage('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        // 显示备份/恢复模态框
+        function showBackupModal() {
+            document.getElementById('backupModal').classList.add('active');
+            loadBackupList();
+        }
+
+        // 关闭备份/恢复模态框
+        function closeBackupModal() {
+            document.getElementById('backupModal').classList.remove('active');
+            document.getElementById('backupDescription').value = '';
+        }
+
+        // 加载备份列表
+        async function loadBackupList() {
+            const backupList = document.getElementById('backupList');
+            backupList.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;">加载中...</div>';
+            
+            try {
+                const response = await fetch('/api/backups');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const backups = result.backups || [];
+                    
+                    if (backups.length === 0) {
+                        backupList.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;">暂无备份</div>';
+                        return;
+                    }
+                    
+                    let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+                    backups.forEach(backup => {
+                        const date = new Date(backup.created_at);
+                        const dateStr = date.toLocaleString('zh-CN');
+                        const sizeKB = (backup.size / 1024).toFixed(2);
+                        const description = backup.description ? ` - ${backup.description}` : '';
+                        
+                        html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">`;
+                        html += `<div style="flex: 1;">`;
+                        html += `<div style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(backup.filename)}${escapeHtml(description)}</div>`;
+                        html += `<div style="font-size: 12px; color: #6c757d;">${dateStr} · ${sizeKB} KB</div>`;
+                        html += `</div>`;
+                        html += `<div style="display: flex; gap: 8px;">`;
+                        html += `<button class="btn btn-primary" onclick="restoreBackup('${escapeHtml(backup.filename)}')" style="padding: 6px 12px; font-size: 12px;">🔄 恢复</button>`;
+                        html += `<button class="btn btn-danger" onclick="deleteBackupFile('${escapeHtml(backup.filename)}')" style="padding: 6px 12px; font-size: 12px;">🗑️ 删除</button>`;
+                        html += `</div>`;
+                        html += `</div>`;
+                    });
+                    html += '</div>';
+                    backupList.innerHTML = html;
+                } else {
+                    backupList.innerHTML = `<div style="text-align: center; padding: 20px; color: #dc3545;">加载失败: ${result.error || '未知错误'}</div>`;
+                }
+            } catch (error) {
+                backupList.innerHTML = `<div style="text-align: center; padding: 20px; color: #dc3545;">加载失败: ${error.message}</div>`;
+            }
+        }
+
+        // 创建备份
+        async function createBackup() {
+            const description = document.getElementById('backupDescription').value.trim();
+            
+            try {
+                const response = await fetch('/api/backup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ description: description })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    document.getElementById('backupDescription').value = '';
+                    loadBackupList();
+                } else {
+                    showMessage('备份失败: ' + (result.error || '未知错误'), 'error');
+                }
+            } catch (error) {
+                showMessage('备份失败: ' + error.message, 'error');
+            }
+        }
+
+        // 恢复备份
+        async function restoreBackup(backupFilename) {
+            if (!confirm(`确定要从备份 "${backupFilename}" 恢复数据库吗？\n\n此操作会覆盖当前所有数据，且不可恢复！\n\n系统会在恢复前自动创建当前数据库的备份。`)) {
+                return;
+            }
+            
+            if (!confirm(`请再次确认：确定要恢复数据库吗？`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ backup_filename: backupFilename })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    closeBackupModal();
+                    // 延迟一下再加载数据，确保数据库已恢复
+                    setTimeout(() => {
+                        loadData();
+                    }, 500);
+                } else {
+                    showMessage('恢复失败: ' + (result.error || '未知错误'), 'error');
+                }
+            } catch (error) {
+                showMessage('恢复失败: ' + error.message, 'error');
+            }
+        }
+
+        // 删除备份
+        async function deleteBackupFile(backupFilename) {
+            if (!confirm(`确定要删除备份 "${backupFilename}" 吗？`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/delete-backup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ backup_filename: backupFilename })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    loadBackupList();
+                } else {
+                    showMessage('删除失败: ' + (result.error || '未知错误'), 'error');
+                }
+            } catch (error) {
+                showMessage('删除失败: ' + error.message, 'error');
+            }
+        }
+
         // 支持回车键快速添加（Ctrl+Enter）
         document.addEventListener('DOMContentLoaded', function() {
             const aiInput = document.getElementById('aiInput');
@@ -2577,6 +3080,123 @@
                 });
             }
         });
+
+        // 排序状态存储（每个分类独立）
+        const sortState = {};
+
+        // 表头点击排序功能
+        function sortItems(category, field, headerElement) {
+            // 获取该分类的所有项目
+            const categorySection = document.querySelector(`.category-section[data-category="${category}"]`);
+            if (!categorySection) return;
+
+            const tbody = categorySection.querySelector('tbody');
+            if (!tbody) return;
+
+            const rows = Array.from(tbody.querySelectorAll('tr[data-item-id]'));
+            if (rows.length === 0) return;
+
+            // 获取当前排序状态
+            const sortKey = `${category}_${field}`;
+            const currentSort = sortState[sortKey] || 'asc';
+            
+            // 切换排序方向：asc <-> desc
+            const newSort = currentSort === 'asc' ? 'desc' : 'asc';
+            sortState[sortKey] = newSort;
+
+            // 清除所有排序指示器
+            categorySection.querySelectorAll('.sort-indicator').forEach(indicator => {
+                indicator.textContent = '';
+            });
+
+            // 显示排序指示器
+            const indicator = headerElement.querySelector('.sort-indicator');
+            if (indicator) {
+                indicator.textContent = newSort === 'asc' ? ' ↑' : ' ↓';
+            }
+
+            // 提取数据并排序
+            const rowData = rows.map(row => {
+                const itemId = parseInt(row.dataset.itemId);
+                const cells = row.querySelectorAll('td');
+                
+                let value;
+                if (field === '项目') {
+                    value = cells[2]?.textContent?.trim() || '';
+                } else if (field === '预算费用') {
+                    value = parseFloat(cells[3]?.textContent?.replace(/,/g, '') || 0);
+                } else if (field === '当前投入') {
+                    value = parseFloat(cells[4]?.textContent?.replace(/,/g, '') || 0);
+                } else if (field === '最终花费') {
+                    value = parseFloat(cells[5]?.textContent?.replace(/,/g, '') || 0);
+                } else if (field === '差价') {
+                    value = parseFloat(cells[6]?.textContent?.replace(/,/g, '') || 0);
+                } else {
+                    value = '';
+                }
+
+                return { row, value, itemId };
+            });
+
+            // 排序
+            rowData.sort((a, b) => {
+                if (newSort === 'asc') {
+                    if (field === '项目') {
+                        return a.value.localeCompare(b.value, 'zh-CN');
+                    } else {
+                        return a.value - b.value;
+                    }
+                } else {
+                    if (field === '项目') {
+                        return b.value.localeCompare(a.value, 'zh-CN');
+                    } else {
+                        return b.value - a.value;
+                    }
+                }
+            });
+
+            // 重新插入排序后的行，并更新序号
+            rowData.forEach(({ row }, index) => {
+                tbody.appendChild(row);
+                // 更新序号（第二列，索引为1）
+                const cells = row.querySelectorAll('td');
+                if (cells[1]) {
+                    cells[1].textContent = index + 1;
+                }
+            });
+        }
+
+        // 折叠/展开分类
+        function toggleCategory(category, event) {
+            if (event) {
+                event.stopPropagation();
+            }
+            
+            const categorySection = document.querySelector(`.category-section[data-category="${category}"]`);
+            if (!categorySection) return;
+
+            const content = categorySection.querySelector('.category-content');
+            const toggle = categorySection.querySelector('.category-toggle');
+            
+            if (!content || !toggle) return;
+
+            const isCollapsed = content.classList.contains('collapsed');
+            
+            if (isCollapsed) {
+                // 展开
+                content.classList.remove('collapsed');
+                toggle.classList.remove('collapsed');
+                toggle.textContent = '▼';
+            } else {
+                // 折叠
+                content.classList.add('collapsed');
+                toggle.classList.add('collapsed');
+                toggle.textContent = '▶';
+            }
+            
+            // 保存折叠状态
+            savePageState();
+        }
 
 
         // 显示导入模态框
@@ -2666,7 +3286,7 @@
                 return;
             }
 
-            if (!confirm('确定要导入此文件吗？当前文件将被备份，新文件将覆盖当前数据。')) {
+            if (!confirm('⚠️ 警告：导入将覆盖当前数据库中的所有数据！\n\n确定要继续吗？建议先导出当前数据作为备份。')) {
                 return;
             }
 
@@ -2682,7 +3302,11 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    showMessage(`导入成功！已导入 ${result.category_count} 个分类，${result.item_count} 个项目。备份文件: ${result.backup_file}`, 'success');
+                    let successMsg = `导入成功！已导入 ${result.category_count} 个分类，${result.item_count} 个项目。`;
+                    if (result.warnings && result.warnings.length > 0) {
+                        successMsg += '\n警告：' + result.warnings.join('; ');
+                    }
+                    showMessage(successMsg, 'success');
                     closeImportModal();
                     loadData();
                 } else {
