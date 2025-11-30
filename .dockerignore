@@ -1,18 +1,21 @@
-__pycache__
+Dockerfile
+README.md
 *.pyc
 *.pyo
 *.pyd
-.Python
-venv/
+__pycache__
+.pytest_cache
 env/
-.venv
+venv/
 .git
 .gitignore
 .DS_Store
 *.log
+.config.json
+# 保留目录结构，但排除文件内容
 exports/*
 uploads/*
+backups/*
 !exports/.gitkeep
 !uploads/.gitkeep
-.config.json
 

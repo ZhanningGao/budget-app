@@ -1,0 +1,42 @@
+name: Deploy to CloudBase CloudRun
+
+on:
+  push:
+    branches:
+      - dev_tcb  # 推送到 dev_tcb 分支时触发
+  workflow_dispatch:  # 允许手动触发
+
+env:
+  TCB_ENV_ID: ${{ secrets.TCB_ENV_ID }}  # 腾讯云环境ID
+  TCB_SECRET_ID: ${{ secrets.TCB_SECRET_ID }}  # 腾讯云 SecretId
+  TCB_SECRET_KEY: ${{ secrets.TCB_SECRET_KEY }}  # 腾讯云 SecretKey
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install CloudBase CLI
+        run: npm install -g @cloudbase/cli
+
+      - name: Login to CloudBase
+        run: |
+          tcb login --apiKeyId ${{ secrets.TCB_SECRET_ID }} --apiKey ${{ secrets.TCB_SECRET_KEY }}
+
+      - name: Deploy to CloudRun
+        run: |
+          tcb cloudrun deploy \
+            --envId ${{ secrets.TCB_ENV_ID }} \
+            --serviceName ${{ secrets.TCB_SERVICE_NAME || 'budget-manager' }} \
+            --dockerfilePath ./Dockerfile \
+            --ignore .git,.github,venv,__pycache__,*.pyc,exports,uploads,backups,logs
+        continue-on-error: false
+
