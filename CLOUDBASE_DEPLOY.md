@@ -25,9 +25,38 @@
    - **TCB_SECRET_ID**: 腾讯云 API 密钥 ID（在腾讯云控制台-访问管理-API密钥管理）
    - **TCB_SECRET_KEY**: 腾讯云 API 密钥 Key
 
+**重要：配置 API 密钥权限**
+
+API 密钥必须有 CloudBase 相关权限，否则会报错 `you are not authorized to perform operation`。
+
+**配置权限步骤**：
+
+1. **使用子账号（推荐）**：
+   - 登录 [腾讯云控制台](https://console.cloud.tencent.com/)
+   - 进入「访问管理」→「用户」→「新建子用户」
+   - 选择「编程访问」，创建子用户
+   - 为子用户添加策略：`QcloudTCBFullAccess`（CloudBase 全读写访问权限）
+   - 使用子用户的 SecretId 和 SecretKey
+
+2. **或为主账号 API 密钥添加权限**：
+   - 进入「访问管理」→「API密钥管理」
+   - 点击需要使用的密钥，查看权限
+   - 确保有 CloudBase 相关权限
+
+3. **最小权限策略**（如果不想使用全权限）：
+   - `QcloudTCBReadOnlyAccess`（只读）+ 自定义策略包含以下操作：
+     - `tcb:DescribeEnvs`（查看环境）
+     - `tcb:CreateCloudRunService`（创建服务）
+     - `tcb:UpdateCloudRunService`（更新服务）
+     - `tcb:DescribeCloudRunServices`（查看服务）
+     - `tcb:DescribeCloudRunServiceDetail`（查看服务详情）
+     - `tcr:CreateRepository`（创建镜像仓库）
+     - `tcr:PushImage`（推送镜像）
+
 **注意**：
 - 如果看不到 Settings 选项，说明您没有仓库的管理员权限
 - Secrets 的值一旦创建就无法再查看，只能删除后重新创建
+- 如果遇到权限错误，请检查 API 密钥是否有 CloudBase 相关权限
 
 #### 2. 触发自动部署
 

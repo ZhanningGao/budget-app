@@ -16,6 +16,12 @@
    - 登录 [腾讯云控制台](https://console.cloud.tencent.com/)
    - 进入「访问管理」→「API密钥管理」
    - 创建或查看 SecretId 和 SecretKey
+   
+   **重要：配置权限**
+   - API 密钥必须有 CloudBase 相关权限
+   - **推荐**：创建子用户，添加策略 `QcloudTCBFullAccess`
+   - 或确保主账号 API 密钥有 CloudBase 操作权限
+   - 否则会报错：`you are not authorized to perform operation`
 
 ### 2. 配置 GitHub Secrets
 
