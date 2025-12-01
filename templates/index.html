@@ -437,6 +437,21 @@
             padding: 0;
             border-radius: 12px;
         }
+        
+        /* 单字段编辑弹窗样式 */
+        #fieldEditModal .modal-content {
+            max-width: 90%;
+            width: 90%;
+        }
+        
+        #fieldEditModal .mobile-detail-body {
+            padding: 20px;
+        }
+        
+        #fieldEditModal input,
+        #fieldEditModal textarea {
+            font-size: 16px; /* iOS Safari 需要至少 16px 才能避免自动缩放 */
+        }
 
         .mobile-detail-header {
             display: flex;
@@ -462,8 +477,19 @@
         .mobile-detail-item {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
+            padding: 12px 16px;
             border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .mobile-detail-item:active {
+            background-color: #f8f9fa;
+        }
+        
+        .mobile-detail-item:not([data-field]) {
+            cursor: default;
         }
 
         .mobile-detail-item:last-child {
@@ -482,6 +508,12 @@
             font-weight: 500;
             text-align: right;
             flex: 1;
+        }
+        
+        .mobile-detail-item[data-field] .mobile-detail-value::after {
+            content: ' ›';
+            color: #999;
+            margin-left: 8px;
         }
 
         .mobile-detail-actions {
@@ -1193,9 +1225,32 @@
                 <!-- 详情内容将通过JavaScript填充 -->
             </div>
             <div class="mobile-detail-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeDetailModal()" style="flex: 1; margin-right: 8px;">取消</button>
-                <button type="button" class="btn btn-danger" onclick="deleteFromDetail()" style="flex: 1; margin-right: 8px;">删除</button>
-                <button type="button" class="btn btn-primary" onclick="editFromDetail()" style="flex: 1;">编辑</button>
+                <button type="button" class="btn btn-secondary" onclick="closeDetailModal()" style="flex: 1; margin-right: 8px;">关闭</button>
+                <button type="button" class="btn btn-danger" onclick="deleteFromDetail()" style="flex: 1;">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 移动端单字段编辑弹窗 -->
+    <div id="fieldEditModal" class="modal mobile-detail-modal">
+        <div class="modal-content mobile-detail-content">
+            <div class="modal-header mobile-detail-header">
+                <h2 id="fieldEditTitle" style="font-size: 16px; margin: 0;">编辑</h2>
+                <button type="button" class="close-btn" onclick="closeFieldEditModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+            </div>
+            <div class="mobile-detail-body" style="padding: 20px;">
+                <form id="fieldEditForm">
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label id="fieldEditLabel" style="display: block; margin-bottom: 8px; font-size: 14px; color: #666;">字段名称</label>
+                        <input type="text" id="fieldEditInput" style="width: 100%; padding: 12px; font-size: 16px; border: 1px solid #dee2e6; border-radius: 4px;">
+                        <input type="number" id="fieldEditInputNumber" step="0.01" style="display: none; width: 100%; padding: 12px; font-size: 16px; border: 1px solid #dee2e6; border-radius: 4px;">
+                        <textarea id="fieldEditTextarea" style="display: none; width: 100%; padding: 12px; font-size: 16px; border: 1px solid #dee2e6; border-radius: 4px; min-height: 100px; resize: vertical;"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="mobile-detail-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeFieldEditModal()" style="flex: 1; margin-right: 8px;">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveFieldEdit()" style="flex: 1;">保存</button>
             </div>
         </div>
     </div>
@@ -1976,7 +2031,20 @@
                     // 空分类显示提示
                     html += `<tr><td colspan="11" style="text-align: center; padding: 40px; color: #6c757d;">暂无项目，点击"添加项目"开始添加</td></tr>`;
                 } else {
-                    categoryItems.forEach(item => {
+                    // 按序号排序（如果序号相同，按ID排序）
+                    categoryItems.sort((a, b) => {
+                        const seqA = parseInt(a['序号']) || 0;
+                        const seqB = parseInt(b['序号']) || 0;
+                        if (seqA !== seqB) {
+                            return seqA - seqB;
+                        }
+                        return a.id - b.id;
+                    });
+                    
+                    // 按显示顺序计算序号（1, 2, 3...）
+                    categoryItems.forEach((item, index) => {
+                        const displaySeqNum = index + 1;  // 显示序号从1开始
+                        
                         // 兼容旧格式
                         const val1st = parseFloat(item['1st预算费用']) || 0;
                         const val2nd = parseFloat(item['2nd预算费用']) || 0;
@@ -1997,7 +2065,7 @@
                         
                         html += `<tr data-item-id="${item.id}" data-category="${escapeHtml(category)}">`;
                         html += `<td class="checkbox-cell"><input type="checkbox" class="row-checkbox" onchange="updateDeleteButton()"></td>`;
-                        html += `<td>${item['序号'] || ''}</td>`;
+                        html += `<td>${displaySeqNum}</td>`;
                         html += `<td><strong>${escapeHtml(item['项目'] || '')}</strong></td>`;
                         html += `<td class="number-cell">${formatNumber(valBudget)}</td>`;
                         html += `<td class="number-cell">${formatNumber(valCurrent)}</td>`;
@@ -2301,6 +2369,8 @@
             if (!item) return;
 
             currentDetailItemId = itemId;
+            // 保存到sessionStorage，用于单字段编辑后恢复
+            sessionStorage.setItem('currentEditingItemId', itemId.toString());
             const detailContent = document.getElementById('itemDetailContent');
             const title = document.getElementById('detailModalTitle');
 
@@ -2320,15 +2390,17 @@
             const valDiff = valBudget - valFinal;
             
             let html = '';
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">项目名称</span><span class="mobile-detail-value">${escapeHtml(item['项目'] || '-')}</span></div>`;
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">预算费用</span><span class="mobile-detail-value">${formatNumber(valBudget)} 元</span></div>`;
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">当前投入</span><span class="mobile-detail-value">${formatNumber(valCurrent)} 元</span></div>`;
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">最终花费</span><span class="mobile-detail-value">${formatNumber(valFinal)} 元</span></div>`;
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">差价</span><span class="mobile-detail-value" style="color: ${valDiff >= 0 ? '#28a745' : '#dc3545'};">${formatNumber(valDiff)} 元</span></div>`;
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">单位</span><span class="mobile-detail-value">${escapeHtml(item['单位'] || '-')}</span></div>`;
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">数量</span><span class="mobile-detail-value">${escapeHtml(item['预算数量'] || '-')}</span></div>`;
+            // 每个字段都可以点击编辑，添加 data-field 属性用于识别字段
+            html += `<div class="mobile-detail-item" data-field="项目" onclick="editFieldFromDetail('项目')"><span class="mobile-detail-label">项目名称</span><span class="mobile-detail-value">${escapeHtml(item['项目'] || '-')}</span></div>`;
+            html += `<div class="mobile-detail-item" data-field="预算费用" onclick="editFieldFromDetail('预算费用')"><span class="mobile-detail-label">预算费用</span><span class="mobile-detail-value">${formatNumber(valBudget)} 元</span></div>`;
+            html += `<div class="mobile-detail-item" data-field="当前投入" onclick="editFieldFromDetail('当前投入')"><span class="mobile-detail-label">当前投入</span><span class="mobile-detail-value">${formatNumber(valCurrent)} 元</span></div>`;
+            html += `<div class="mobile-detail-item" data-field="最终花费" onclick="editFieldFromDetail('最终花费')"><span class="mobile-detail-label">最终花费</span><span class="mobile-detail-value">${formatNumber(valFinal)} 元</span></div>`;
+            // 差价是只读的，不添加点击事件
+            html += `<div class="mobile-detail-item" style="cursor: default;"><span class="mobile-detail-label">差价</span><span class="mobile-detail-value" style="color: ${valDiff >= 0 ? '#28a745' : '#dc3545'};"><span style="display: none;">›</span>${formatNumber(valDiff)} 元</span></div>`;
+            html += `<div class="mobile-detail-item" data-field="单位" onclick="editFieldFromDetail('单位')"><span class="mobile-detail-label">单位</span><span class="mobile-detail-value">${escapeHtml(item['单位'] || '-')}</span></div>`;
+            html += `<div class="mobile-detail-item" data-field="预算数量" onclick="editFieldFromDetail('预算数量')"><span class="mobile-detail-label">数量</span><span class="mobile-detail-value">${escapeHtml(item['预算数量'] || '-')}</span></div>`;
             // 备注始终显示，即使为空也显示
-            html += `<div class="mobile-detail-item"><span class="mobile-detail-label">备注</span><span class="mobile-detail-value" style="text-align: left; white-space: normal; word-break: break-word;">${escapeHtml(item['备注'] || '-')}</span></div>`;
+            html += `<div class="mobile-detail-item" data-field="备注" onclick="editFieldFromDetail('备注')"><span class="mobile-detail-label">备注</span><span class="mobile-detail-value" style="text-align: left; white-space: normal; word-break: break-word;">${escapeHtml(item['备注'] || '-')}</span></div>`;
 
             detailContent.innerHTML = html;
             document.getElementById('itemDetailModal').classList.add('active');
@@ -2343,6 +2415,8 @@
         function closeDetailModal() {
             document.getElementById('itemDetailModal').classList.remove('active');
             currentDetailItemId = null;
+            // 清除sessionStorage中的编辑项ID（只有在真正关闭详情时才清除）
+            sessionStorage.removeItem('currentEditingItemId');
             // 从浏览器历史记录中移除详情界面状态
             if (window.history.state && window.history.state.detailView) {
                 window.history.back();
@@ -2359,16 +2433,214 @@
             }
         });
 
-        // 从详情弹窗编辑（保存按钮）
-        function editFromDetail() {
-            if (currentDetailItemId !== null) {
-                closeDetailModal();
-                // 打开编辑表单
-                editItem(currentDetailItemId);
-                // 移动端显示编辑弹窗
-                if (window.innerWidth <= 768) {
-                    document.getElementById('itemModal').style.display = 'flex';
+        // 从详情弹窗编辑指定字段（单字段编辑）
+        function editFieldFromDetail(fieldName) {
+            if (currentDetailItemId === null) return;
+            
+            // 保存当前详情项ID（因为closeDetailModal会清空它）
+            const savedDetailItemId = currentDetailItemId;
+            
+            const item = items.find(i => i.id === currentDetailItemId);
+            if (!item) return;
+            
+            // 字段名称映射
+            const fieldLabels = {
+                '项目': '项目名称',
+                '预算费用': '预算费用（元）',
+                '当前投入': '当前投入（元）',
+                '最终花费': '最终花费（元）',
+                '单位': '单位',
+                '预算数量': '数量',
+                '备注': '备注'
+            };
+            
+            const fieldLabel = fieldLabels[fieldName] || fieldName;
+            let fieldValue = item[fieldName] || '';
+            
+            // 数值字段需要特殊处理
+            if (fieldName === '预算费用' || fieldName === '当前投入' || fieldName === '最终花费') {
+                fieldValue = parseFloat(fieldValue) || 0;
+            }
+            
+            // 设置标题和标签
+            document.getElementById('fieldEditTitle').textContent = `编辑${fieldLabel}`;
+            document.getElementById('fieldEditLabel').textContent = fieldLabel;
+            
+            // 根据字段类型显示不同的输入框
+            const textInput = document.getElementById('fieldEditInput');
+            const numberInput = document.getElementById('fieldEditInputNumber');
+            const textareaInput = document.getElementById('fieldEditTextarea');
+            
+            // 隐藏所有输入框
+            textInput.style.display = 'none';
+            numberInput.style.display = 'none';
+            textareaInput.style.display = 'none';
+            
+            // 根据字段类型显示对应的输入框
+            if (fieldName === '备注') {
+                textareaInput.style.display = 'block';
+                textareaInput.value = fieldValue;
+                textareaInput.setAttribute('data-field-name', fieldName);
+            } else if (fieldName === '预算费用' || fieldName === '当前投入' || fieldName === '最终花费') {
+                numberInput.style.display = 'block';
+                numberInput.value = fieldValue;
+                numberInput.setAttribute('data-field-name', fieldName);
+            } else {
+                textInput.style.display = 'block';
+                textInput.value = fieldValue;
+                textInput.setAttribute('data-field-name', fieldName);
+            }
+            
+            // 保存当前详情项ID到sessionStorage（因为closeDetailModal会清空currentDetailItemId）
+            sessionStorage.setItem('currentEditingItemId', savedDetailItemId.toString());
+            
+            // 关闭详情弹窗
+            document.getElementById('itemDetailModal').classList.remove('active');
+            
+            // 显示单字段编辑弹窗
+            document.getElementById('fieldEditModal').classList.add('active');
+            
+            // 延迟聚焦到输入框
+            setTimeout(() => {
+                const activeInput = textInput.style.display !== 'none' ? textInput : 
+                                   (numberInput.style.display !== 'none' ? numberInput : textareaInput);
+                activeInput.focus();
+                if (activeInput.type === 'text' || activeInput.tagName === 'TEXTAREA') {
+                    activeInput.select();
                 }
+            }, 300);
+        }
+        
+        // 关闭单字段编辑弹窗
+        function closeFieldEditModal() {
+            document.getElementById('fieldEditModal').classList.remove('active');
+            document.getElementById('fieldEditForm').reset();
+            // 返回详情页面（从sessionStorage恢复itemId）
+            const savedItemId = sessionStorage.getItem('currentEditingItemId');
+            if (savedItemId) {
+                const itemId = parseInt(savedItemId);
+                setTimeout(() => {
+                    showItemDetail(itemId);
+                }, 100);
+            }
+        }
+        
+        // 保存单字段编辑
+        async function saveFieldEdit() {
+            // 从sessionStorage获取itemId（因为currentDetailItemId可能已被清空）
+            const savedItemIdStr = sessionStorage.getItem('currentEditingItemId');
+            if (!savedItemIdStr) {
+                showMessage('无法获取项目ID', 'error');
+                return;
+            }
+            
+            const itemId = parseInt(savedItemIdStr);
+            if (!itemId || isNaN(itemId)) {
+                showMessage('项目ID无效', 'error');
+                return;
+            }
+            
+            const textInput = document.getElementById('fieldEditInput');
+            const numberInput = document.getElementById('fieldEditInputNumber');
+            const textareaInput = document.getElementById('fieldEditTextarea');
+            
+            // 获取当前显示的输入框
+            let activeInput = null;
+            let fieldName = null;
+            
+            if (textInput.style.display !== 'none') {
+                activeInput = textInput;
+                fieldName = textInput.getAttribute('data-field-name');
+            } else if (numberInput.style.display !== 'none') {
+                activeInput = numberInput;
+                fieldName = numberInput.getAttribute('data-field-name');
+            } else if (textareaInput.style.display !== 'none') {
+                activeInput = textareaInput;
+                fieldName = textareaInput.getAttribute('data-field-name');
+            }
+            
+            if (!activeInput || !fieldName) {
+                showMessage('无法获取字段信息', 'error');
+                return;
+            }
+            
+            const newValue = activeInput.value;
+            // 从items数组中找到对应的项目（如果items已加载）
+            const item = items.find(i => i.id === itemId);
+            
+            // 构建更新数据，必须包含所有必要字段
+            const updateData = {
+                id: itemId
+            };
+            
+            // 如果items中有该项目，保留其他字段的值
+            if (item) {
+                // 保留原有字段值
+                updateData['项目'] = item['项目'] || '';
+                updateData['单位'] = item['单位'] || '';
+                updateData['预算数量'] = item['预算数量'] || '';
+                updateData['预算费用'] = parseFloat(item['预算费用']) || 0;
+                updateData['当前投入'] = parseFloat(item['当前投入']) || 0;
+                updateData['最终花费'] = parseFloat(item['最终花费']) || 0;
+                updateData['备注'] = item['备注'] || '';
+            } else {
+                // 如果items中没有，设置默认值
+                updateData['项目'] = '';
+                updateData['单位'] = '';
+                updateData['预算数量'] = '';
+                updateData['预算费用'] = 0;
+                updateData['当前投入'] = 0;
+                updateData['最终花费'] = 0;
+                updateData['备注'] = '';
+            }
+            
+            // 更新对应字段的值
+            if (fieldName === '预算费用' || fieldName === '当前投入' || fieldName === '最终花费') {
+                updateData[fieldName] = parseFloat(newValue) || 0;
+            } else {
+                updateData[fieldName] = newValue;
+            }
+            
+            // 重新计算差价（使用更新后的值）
+            const valBudget = updateData['预算费用'];
+            const valFinal = updateData['最终花费'];
+            updateData['差价'] = Math.round(valBudget - valFinal);
+            
+            try {
+                const response = await fetch('/api/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item: updateData })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('保存成功', 'success');
+                    // 关闭单字段编辑弹窗
+                    document.getElementById('fieldEditModal').classList.remove('active');
+                    document.getElementById('fieldEditForm').reset();
+                    // 从sessionStorage获取保存的itemId
+                    const savedItemId = sessionStorage.getItem('currentEditingItemId');
+                    if (savedItemId) {
+                        const itemId = parseInt(savedItemId);
+                        // 重新加载数据
+                        loadData();
+                        // 重新显示详情页面
+                        setTimeout(() => {
+                            // 等待数据加载完成后再显示详情
+                            setTimeout(() => {
+                                showItemDetail(itemId);
+                            }, 200);
+                        }, 100);
+                    } else {
+                        // 如果没有保存的ID，只重新加载数据
+                        loadData();
+                    }
+                } else {
+                    showMessage('保存失败: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('保存失败: ' + error.message, 'error');
             }
         }
 
