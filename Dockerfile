@@ -3,9 +3,16 @@
 FROM python:3-alpine
 
 # 容器默认时区为UTC，设置时区为上海时间
-RUN apk add tzdata && \
-    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
-    echo Asia/Shanghai > /etc/timezone
+# 安装构建依赖（pandas/numpy 需要编译）
+RUN apk add --no-cache \
+    tzdata \
+    gcc \
+    g++ \
+    musl-dev \
+    python3-dev \
+    linux-headers \
+    && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo Asia/Shanghai > /etc/timezone
 
 ENV APP_HOME /app
 WORKDIR $APP_HOME
@@ -28,7 +35,9 @@ RUN mkdir -p uploads exports logs fonts backups
 RUN pip config set global.index-url http://mirrors.cloud.tencent.com/pypi/simple && \
     pip config set global.trusted-host mirrors.cloud.tencent.com && \
     pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    # 安装完成后清理构建依赖（减小镜像大小）
+    apk del gcc g++ musl-dev python3-dev linux-headers
 
 # 暴露端口（腾讯云托管默认使用80端口，可通过环境变量配置）
 EXPOSE 80

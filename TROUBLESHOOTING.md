@@ -4,13 +4,20 @@
 
 ### 问题：权限错误 `you are not authorized to perform operation`
 
-**错误信息**：
+**错误信息示例**：
 ```
 [request id:xxx]you are not authorized to perform operation (tcb:DescribeEnvs)
 resource (qcs::tcb:ap-shanghai:uin/xxx:env/*) has no permission
 ```
 
-**原因**：API 密钥没有 CloudBase 相关权限
+或
+
+```
+[DescribeCloudRunServerDetail] you are not authorized to perform operation (tcbr:DescribeCloudRunServerDetail)
+resource (qcs::tcbr:ap-shanghai::env/xxx) has no permission
+```
+
+**原因**：API 密钥没有 CloudBase 或 CloudRun 相关权限
 
 **解决方法**：
 
@@ -29,13 +36,17 @@ resource (qcs::tcb:ap-shanghai:uin/xxx:env/*) has no permission
 2. 搜索 `QcloudTCBFullAccess`
 3. 将该策略关联到您的账号
 4. 或创建自定义策略，包含以下操作：
-   - `tcb:DescribeEnvs`
-   - `tcb:CreateCloudRunService`
-   - `tcb:UpdateCloudRunService`
-   - `tcb:DescribeCloudRunServices`
-   - `tcb:DescribeCloudRunServiceDetail`
-   - `tcr:CreateRepository`
-   - `tcr:PushImage`
+   - `tcb:DescribeEnvs`（查看环境）
+   - `tcb:CreateCloudRunService`（创建服务）
+   - `tcb:UpdateCloudRunService`（更新服务）
+   - `tcb:DescribeCloudRunServices`（查看服务列表）
+   - `tcb:DescribeCloudRunServiceDetail`（查看服务详情）
+   - `tcbr:DescribeCloudRunServerDetail`（查看 CloudRun 服务详情）**重要**
+   - `tcbr:CreateCloudRunServer`（创建 CloudRun 服务）
+   - `tcbr:UpdateCloudRunServer`（更新 CloudRun 服务）
+   - `tcr:CreateRepository`（创建镜像仓库）
+   - `tcr:PushImage`（推送镜像）
+   - `tcr:PullImage`（拉取镜像）
 
 #### 方法三：检查权限配置
 

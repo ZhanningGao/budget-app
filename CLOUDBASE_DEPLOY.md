@@ -50,8 +50,14 @@ API 密钥必须有 CloudBase 相关权限，否则会报错 `you are not author
      - `tcb:UpdateCloudRunService`（更新服务）
      - `tcb:DescribeCloudRunServices`（查看服务）
      - `tcb:DescribeCloudRunServiceDetail`（查看服务详情）
+     - `tcbr:DescribeCloudRunServerDetail`（查看 CloudRun 服务详情）**重要**
+     - `tcbr:CreateCloudRunServer`（创建 CloudRun 服务）
+     - `tcbr:UpdateCloudRunServer`（更新 CloudRun 服务）
      - `tcr:CreateRepository`（创建镜像仓库）
      - `tcr:PushImage`（推送镜像）
+     - `tcr:PullImage`（拉取镜像）
+
+**推荐**：直接使用 `QcloudTCBFullAccess` + `QcloudTCBRFullAccess`（如果存在）策略，避免权限问题
 
 **注意**：
 - 如果看不到 Settings 选项，说明您没有仓库的管理员权限
