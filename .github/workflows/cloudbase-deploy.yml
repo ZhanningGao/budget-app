@@ -31,10 +31,25 @@ jobs:
         run: |
           tcb login --apiKeyId ${{ secrets.TCB_SECRET_ID }} --apiKey ${{ secrets.TCB_SECRET_KEY }}
 
+      - name: Verify environment
+        run: |
+          echo "🔍 验证环境配置..."
+          echo "Environment ID: ${{ secrets.TCB_ENV_ID }}"
+          echo "Service Name: ${{ secrets.TCB_SERVICE_NAME || 'budget-manager' }}"
+          tcb env:list || echo "⚠️ 无法列出环境，但继续部署..."
+
       - name: Deploy to CloudRun
         run: |
+          echo "🚀 开始部署..."
+          SERVICE_NAME="${{ secrets.TCB_SERVICE_NAME || 'budget-manager' }}"
+          # 确保服务名称符合规范（只包含小写字母、数字、连字符）
+          SERVICE_NAME=$(echo "$SERVICE_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')
+          # 移除开头和结尾的连字符
+          SERVICE_NAME=$(echo "$SERVICE_NAME" | sed 's/^-\+//;s/-\+$//')
+          echo "📦 使用服务名称: $SERVICE_NAME"
+          echo "📋 环境ID: ${{ secrets.TCB_ENV_ID }}"
           echo "y" | tcb cloudrun deploy \
             --envId ${{ secrets.TCB_ENV_ID }} \
-            --serviceName ${{ secrets.TCB_SERVICE_NAME || 'budget-manager' }}
+            --serviceName "$SERVICE_NAME"
         continue-on-error: false
 

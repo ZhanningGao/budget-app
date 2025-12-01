@@ -103,3 +103,70 @@ Error: Process completed with exit code 130.
 1. 在 GitHub Secrets 中设置 `TCB_SERVICE_NAME` 为其他名称
 2. 或在云托管控制台删除旧服务后重新部署
 
+### 问题：400 Bad Request HTTP ERROR
+
+**错误信息**：
+```
+✖ 400 Bad Request HTTP ERROR
+Error: 400 Bad Request HTTP ERROR
+```
+
+**可能原因**：
+1. **服务名称格式不符合规范**
+   - 服务名称只能包含小写字母、数字、连字符（-）
+   - 不能包含下划线、空格、特殊字符
+   - 必须以字母开头和结尾
+   - 长度限制：1-40 个字符
+   - 示例：`budget-manager` ✅，`budget_manager` ❌，`Budget Manager` ❌
+
+2. **环境ID格式错误**
+   - 环境ID格式应为：`env-xxxxx`
+   - 检查 GitHub Secrets 中的 `TCB_ENV_ID` 是否正确
+   - 确保没有多余的空格或换行符
+
+3. **Dockerfile 问题**
+   - 确保 Dockerfile 在项目根目录
+   - 检查 Dockerfile 语法是否正确
+   - 确保 Dockerfile 中没有语法错误
+
+4. **API 密钥权限不足**
+   - 虽然能登录，但可能缺少创建服务的权限
+   - 需要 `tcb:CreateCloudRunService` 权限
+
+**解决方法**：
+
+#### 方法一：检查并修复服务名称
+1. 确保服务名称符合规范（小写字母、数字、连字符）
+2. 如果服务名称包含特殊字符，修改为符合规范的名称
+3. 工作流已自动规范化服务名称，但建议在 GitHub Secrets 中直接使用规范名称
+
+#### 方法二：验证环境ID
+1. 登录 [CloudBase 控制台](https://console.cloud.tencent.com/tcb)
+2. 查看环境列表，确认环境ID格式为 `env-xxxxx`
+3. 复制环境ID（不要包含空格）
+4. 更新 GitHub Secrets 中的 `TCB_ENV_ID`
+
+#### 方法三：检查 Dockerfile
+1. 确保 `Dockerfile` 在项目根目录
+2. 检查 Dockerfile 语法是否正确
+3. 尝试本地构建测试：`docker build -t test .`
+
+#### 方法四：验证 API 权限
+1. 确保 API 密钥有 `QcloudTCBFullAccess` 权限
+2. 或至少包含 `tcb:CreateCloudRunService` 权限
+3. 参考「权限错误」部分的解决方法
+
+#### 方法五：使用交互式部署测试
+在本地运行：
+```bash
+tcb login
+tcb cloudrun deploy
+```
+按照提示输入参数，查看具体错误信息
+
+#### 方法六：查看详细日志
+1. 在 GitHub Actions 中查看完整的错误日志
+2. 检查是否有更详细的错误信息
+3. 查看 CloudBase 控制台的部署日志
+4. 检查是否有更具体的错误提示
+
