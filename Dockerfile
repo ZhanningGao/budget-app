@@ -1,6 +1,7 @@
 # Dockerfile for 装修预算表管理系统
 # 使用官方 Python 轻量级镜像（符合腾讯云托管推荐）
-FROM python:3-alpine
+# 使用 Python 3.12 而不是 latest，因为 pandas 2.1.3 与 Python 3.14 不兼容
+FROM python:3.12-alpine
 
 # 容器默认时区为UTC，设置时区为上海时间
 # 安装构建依赖（pandas/numpy 需要编译）
