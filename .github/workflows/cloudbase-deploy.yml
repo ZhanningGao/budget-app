@@ -48,8 +48,27 @@ jobs:
           SERVICE_NAME=$(echo "$SERVICE_NAME" | sed 's/^-\+//;s/-\+$//')
           echo "📦 使用服务名称: $SERVICE_NAME"
           echo "📋 环境ID: ${{ secrets.TCB_ENV_ID }}"
+          echo ""
+          echo "⚠️  注意：存储挂载需要在云托管控制台手动配置"
+          echo "   1. 进入服务详情 → 存储挂载"
+          echo "   2. 选择「云开发对象存储」"
+          echo "   3. 挂载到实例目录：/mnt"
+          echo "   配置后，每次部署都会保留存储挂载配置"
+          echo ""
           echo "y" | tcb cloudrun deploy \
             --envId ${{ secrets.TCB_ENV_ID }} \
             --serviceName "$SERVICE_NAME"
         continue-on-error: false
+      
+      - name: Verify deployment
+        run: |
+          echo "✅ 部署完成！"
+          echo ""
+          echo "📝 后续步骤："
+          echo "1. 进入云托管控制台 → 服务详情 → 存储挂载"
+          echo "2. 配置存储挂载（如果尚未配置）："
+          echo "   - 存储类型：云开发对象存储"
+          echo "   - 对象存储挂载目录：/"
+          echo "   - 挂载到实例目录：/mnt"
+          echo "3. 应用会自动检测并使用 /mnt 目录存储数据库"
 

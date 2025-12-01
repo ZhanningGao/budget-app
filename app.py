@@ -72,6 +72,7 @@ def allowed_file(filename):
 EXCEL_FILE = os.getenv('EXCEL_FILE', '红玺台复式装修预算表.xlsx')
 
 # 初始化数据库
+# 注意：database.py 会自动检测并使用持久存储（/mnt）如果可用
 init_database()
 
 # 如果存在Excel文件且数据库为空，自动导入Excel数据

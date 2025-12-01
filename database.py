@@ -1,6 +1,7 @@
 """
 数据库管理模块
 使用SQLite作为后端数据库
+支持持久存储（优先使用 /mnt 挂载的存储桶）
 """
 import sqlite3
 import os
@@ -8,13 +9,82 @@ import shutil
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 
-# 数据库文件路径
-DATA_DIR = os.getenv('DATA_DIR', '.')
-DB_FILE = os.path.join(DATA_DIR, 'budget.db')
-BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
+# 持久存储路径（挂载的存储桶）
+PERSISTENT_STORAGE = '/mnt'
+PERSISTENT_DB_FILE = os.path.join(PERSISTENT_STORAGE, 'budget.db')
+PERSISTENT_BACKUP_DIR = os.path.join(PERSISTENT_STORAGE, 'backups')
 
-# 确保备份目录存在
-os.makedirs(BACKUP_DIR, exist_ok=True)
+# 本地数据目录（容器内，作为备用）
+LOCAL_DATA_DIR = os.getenv('DATA_DIR', '.')
+LOCAL_DB_FILE = os.path.join(LOCAL_DATA_DIR, 'budget.db')
+LOCAL_BACKUP_DIR = os.path.join(LOCAL_DATA_DIR, 'backups')
+
+# 确定使用哪个数据库路径（优先持久存储）
+def _get_db_paths():
+    """获取数据库路径（优先持久存储）"""
+    # 检查持久存储是否可用
+    if os.path.exists(PERSISTENT_STORAGE) and os.path.isdir(PERSISTENT_STORAGE):
+        # 持久存储可用，优先使用
+        db_file = PERSISTENT_DB_FILE
+        backup_dir = PERSISTENT_BACKUP_DIR
+        use_persistent = True
+    else:
+        # 持久存储不可用，使用本地
+        db_file = LOCAL_DB_FILE
+        backup_dir = LOCAL_BACKUP_DIR
+        use_persistent = False
+    
+    # 确保目录存在
+    os.makedirs(os.path.dirname(db_file), exist_ok=True)
+    os.makedirs(backup_dir, exist_ok=True)
+    
+    return db_file, backup_dir, use_persistent
+
+# 初始化数据库路径
+DB_FILE, BACKUP_DIR, USE_PERSISTENT = _get_db_paths()
+
+def _migrate_to_persistent_storage():
+    """将本地数据库迁移到持久存储（如果持久存储可用且本地有数据）"""
+    if not USE_PERSISTENT:
+        return  # 持久存储不可用，无需迁移
+    
+    # 如果持久存储已有数据库，不迁移
+    if os.path.exists(PERSISTENT_DB_FILE):
+        return
+    
+    # 如果本地有数据库，迁移到持久存储
+    if os.path.exists(LOCAL_DB_FILE):
+        try:
+            print(f"📦 迁移数据库到持久存储: {LOCAL_DB_FILE} -> {PERSISTENT_DB_FILE}")
+            shutil.copy2(LOCAL_DB_FILE, PERSISTENT_DB_FILE)
+            # 同时迁移 WAL 和 SHM 文件（如果存在）
+            if os.path.exists(LOCAL_DB_FILE + '-wal'):
+                shutil.copy2(LOCAL_DB_FILE + '-wal', PERSISTENT_DB_FILE + '-wal')
+            if os.path.exists(LOCAL_DB_FILE + '-shm'):
+                shutil.copy2(LOCAL_DB_FILE + '-shm', PERSISTENT_DB_FILE + '-shm')
+            print(f"✅ 数据库已迁移到持久存储")
+        except Exception as e:
+            print(f"⚠️ 数据库迁移失败: {e}，继续使用本地数据库")
+    
+    # 迁移备份文件
+    if os.path.exists(LOCAL_BACKUP_DIR):
+        try:
+            os.makedirs(PERSISTENT_BACKUP_DIR, exist_ok=True)
+            for filename in os.listdir(LOCAL_BACKUP_DIR):
+                if filename.startswith('backup_') and filename.endswith('.db'):
+                    src = os.path.join(LOCAL_BACKUP_DIR, filename)
+                    dst = os.path.join(PERSISTENT_BACKUP_DIR, filename)
+                    if not os.path.exists(dst):
+                        shutil.copy2(src, dst)
+            print(f"✅ 备份文件已迁移到持久存储")
+        except Exception as e:
+            print(f"⚠️ 备份文件迁移失败: {e}")
+
+# 在模块加载时尝试迁移
+_migrate_to_persistent_storage()
+
+# 重新初始化路径（迁移后）
+DB_FILE, BACKUP_DIR, USE_PERSISTENT = _get_db_paths()
 
 def get_db_connection():
     """获取数据库连接"""
