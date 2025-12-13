@@ -215,8 +215,55 @@ def parse_excel():
     """解析Excel文件，返回结构化的数据"""
     df = pd.read_excel(EXCEL_FILE, engine='openpyxl', header=None)
     
-    # 表头行（第4行，索引3）
-    header_row = 3
+    # 查找表头行（包含"序号"和"项目"的行）
+    header_row = None
+    header_cols = {}  # 存储列名到列索引的映射
+    
+    for i in range(min(10, len(df))):  # 在前10行中查找表头
+        row = df.iloc[i].astype(str).tolist()
+        row_str = ' '.join([str(cell).strip() for cell in row if pd.notna(cell)])
+        
+        # 检查是否包含"序号"和"项目"
+        if '序号' in row_str and '项目' in row_str:
+            header_row = i
+            # 建立列名到索引的映射
+            for col_idx, cell_value in enumerate(row):
+                cell_str = str(cell_value).strip().lower() if pd.notna(cell_value) else ''
+                if '序号' in cell_str:
+                    header_cols['序号'] = col_idx
+                elif '项目' in cell_str:
+                    header_cols['项目'] = col_idx
+                elif '单位' in cell_str:
+                    header_cols['单位'] = col_idx
+                elif '预算数量' in cell_str or '数量' in cell_str:
+                    header_cols['预算数量'] = col_idx
+                elif '预算费用' in cell_str or '预算' in cell_str:
+                    if '预算费用' not in header_cols:  # 优先使用"预算费用"
+                        header_cols['预算费用'] = col_idx
+                    if '1st预算' not in header_cols and '1st' in cell_str:
+                        header_cols['1st预算'] = col_idx
+                    if '2nd预算' not in header_cols and '2nd' in cell_str:
+                        header_cols['2nd预算'] = col_idx
+                elif '当前投入' in cell_str or ('当前' in cell_str and '投入' in cell_str):
+                    header_cols['当前投入'] = col_idx
+                elif '最终花费' in cell_str or ('最终' in cell_str and '花费' in cell_str):
+                    header_cols['最终花费'] = col_idx
+                elif '最终实际花费' in cell_str or ('最终' in cell_str and '实际' in cell_str):
+                    header_cols['最终实际花费'] = col_idx
+                elif '差价' in cell_str:
+                    header_cols['差价'] = col_idx
+                elif '备注' in cell_str:
+                    header_cols['备注'] = col_idx
+            break
+    
+    # 如果没找到表头，使用默认位置（兼容旧格式）
+    if header_row is None:
+        header_row = 3
+        header_cols = {
+            '序号': 0, '项目': 1, '单位': 2, '预算数量': 3,
+            '1st预算': 4, '2nd预算': 5, '最终实际花费': 6, '差价': 7, '备注': 8
+        }
+    
     headers = ['序号', '项目', '单位', '预算数量', '预算费用', '当前投入', '最终花费', '差价', '备注']
     
     categories = []
@@ -243,24 +290,46 @@ def parse_excel():
         elif first_col.isdigit() and i > header_row:
             try:
                 seq_num = int(float(first_col))
-                # 读取原始列（兼容旧格式）
-                # Excel列顺序：序号(0), 项目(1), 单位(2), 预算数量(3), 1st预算(4), 2nd预算(5), 最终实际花费(6), 差价(7), 备注(8)
-                val_1st = str(row[4]).strip() if pd.notna(row[4]) and str(row[4]) != 'nan' else ''
-                val_2nd = str(row[5]).strip() if len(row) > 5 and pd.notna(row[5]) and str(row[5]) != 'nan' else ''
-                val_old_actual = str(row[6]).strip() if len(row) > 6 and pd.notna(row[6]) and str(row[6]) != 'nan' else ''  # 旧格式：最终实际花费
-                val_diff = str(row[7]).strip() if len(row) > 7 and pd.notna(row[7]) and str(row[7]) != 'nan' else ''  # 差价
-                val_remark = str(row[8]).strip() if len(row) > 8 and pd.notna(row[8]) and str(row[8]) != 'nan' else ''  # 备注
                 
-                # 合并1st和2nd预算为预算费用：优先使用2nd，否则使用1st
-                if val_2nd and val_2nd.replace('.','').replace('-','').isdigit():
+                # 根据表头映射读取数据
+                def get_col_value(col_name, default=''):
+                    col_idx = header_cols.get(col_name)
+                    if col_idx is not None and col_idx < len(row):
+                        val = str(row[col_idx]).strip() if pd.notna(row[col_idx]) and str(row[col_idx]) != 'nan' else ''
+                        return val
+                    return default
+                
+                # 读取预算相关字段
+                val_budget_new = get_col_value('预算费用', '')  # 新格式：直接有"预算费用"列
+                val_1st = get_col_value('1st预算', '')  # 旧格式：1st预算
+                val_2nd = get_col_value('2nd预算', '')  # 旧格式：2nd预算
+                
+                # 读取当前投入和最终花费
+                val_current_new = get_col_value('当前投入', '')  # 新格式：当前投入
+                val_old_actual = get_col_value('最终实际花费', '')  # 旧格式：最终实际花费
+                val_final_new = get_col_value('最终花费', '')  # 新格式：最终花费
+                
+                val_diff = get_col_value('差价', '')
+                val_remark = get_col_value('备注', '')
+                
+                # 确定预算费用：优先使用新格式的"预算费用"，否则合并1st和2nd
+                if val_budget_new and val_budget_new.replace('.','').replace('-','').isdigit():
+                    budget_value = val_budget_new
+                elif val_2nd and val_2nd.replace('.','').replace('-','').isdigit():
                     budget_value = val_2nd
                 elif val_1st and val_1st.replace('.','').replace('-','').isdigit():
                     budget_value = val_1st
                 else:
                     budget_value = ''
                 
-                # 当前投入：从旧格式的"最终实际花费"读取，但如果等于预算值，说明可能是错误数据，设为空
-                current_value = val_old_actual
+                # 确定当前投入：优先使用新格式的"当前投入"，否则使用旧格式的"最终实际花费"
+                # 但如果等于预算值，说明可能是错误数据，设为空
+                if val_current_new and val_current_new.replace('.','').replace('-','').isdigit():
+                    current_value = val_current_new
+                else:
+                    current_value = val_old_actual
+                
+                # 验证：如果当前投入等于预算，可能是错误数据，设为空
                 if budget_value and current_value:
                     try:
                         budget_num = float(budget_value)
@@ -271,8 +340,8 @@ def parse_excel():
                     except:
                         pass
                 
-                # 最终花费：旧格式Excel中没有此列，默认为空
-                final_value = ''
+                # 最终花费：优先使用新格式，否则为空
+                final_value = val_final_new if val_final_new else ''
                 
                 item = {
                     'id': item_id,
@@ -582,27 +651,88 @@ def normalize_imported_data():
     wb = load_workbook(EXCEL_FILE)
     ws = wb.active
     
-    header_row = 3  # 表头行（第4行，索引3）
+    # 查找表头行（包含"序号"和"项目"的行）
+    header_row = None
+    header_cols = {}  # 存储列名到列索引的映射（openpyxl使用1-based索引）
+    
+    for i in range(1, min(11, ws.max_row + 1)):  # 在前10行中查找表头
+        row_values = []
+        for col in range(1, min(20, ws.max_column + 1)):  # 检查前20列
+            cell_value = safe_get_cell_value(ws, i, col)
+            if cell_value is not None:
+                row_values.append(str(cell_value).strip().lower())
+        
+        row_str = ' '.join(row_values)
+        
+        # 检查是否包含"序号"和"项目"
+        if '序号' in row_str and '项目' in row_str:
+            header_row = i
+            # 建立列名到索引的映射
+            for col in range(1, min(20, ws.max_column + 1)):
+                cell_value = safe_get_cell_value(ws, i, col)
+                if cell_value is not None:
+                    cell_str = str(cell_value).strip().lower()
+                    if '序号' in cell_str:
+                        header_cols['序号'] = col
+                    elif '项目' in cell_str:
+                        header_cols['项目'] = col
+                    elif '预算费用' in cell_str or ('预算' in cell_str and '费用' in cell_str):
+                        if '预算费用' not in header_cols:
+                            header_cols['预算费用'] = col
+                    elif '1st预算' in cell_str or '1st' in cell_str:
+                        header_cols['1st预算'] = col
+                    elif '2nd预算' in cell_str or '2nd' in cell_str:
+                        header_cols['2nd预算'] = col
+                    elif '当前投入' in cell_str or ('当前' in cell_str and '投入' in cell_str):
+                        header_cols['当前投入'] = col
+                    elif '最终花费' in cell_str or ('最终' in cell_str and '花费' in cell_str):
+                        header_cols['最终花费'] = col
+                    elif '最终实际花费' in cell_str:
+                        header_cols['最终实际花费'] = col
+                    elif '差价' in cell_str:
+                        header_cols['差价'] = col
+            break
+    
+    # 如果没找到表头，使用默认位置（兼容旧格式）
+    if header_row is None:
+        header_row = 4  # openpyxl使用1-based，所以第4行是索引4
+        header_cols = {
+            '序号': 1, '项目': 2, '单位': 3, '预算数量': 4,
+            '1st预算': 5, '2nd预算': 6, '最终实际花费': 7, '差价': 8, '备注': 9
+        }
+    
+    # 检查值是否为空（None或空字符串）
+    def is_empty(val):
+        return val is None or (isinstance(val, str) and not val.strip())
     
     # 遍历所有数据行
     for i in range(header_row + 1, ws.max_row + 1):
-        first_cell = safe_get_cell_value(ws, i, 1)
+        seq_col = header_cols.get('序号', 1)
+        first_cell = safe_get_cell_value(ws, i, seq_col)
         # 检查是否是数据行（序号是数字）
         if first_cell and str(first_cell).strip().isdigit():
-            # 列顺序：预算费用(5), 当前投入(6), 最终花费(7), 差价(8)
-            # 兼容旧格式：如果列5和列6都有值，合并为预算费用
-            val_1st = safe_get_cell_value(ws, i, 5)
-            val_2nd = safe_get_cell_value(ws, i, 6)
-            val_current = safe_get_cell_value(ws, i, 7)  # 可能是旧的实际花费或新的当前投入
-            val_final = safe_get_cell_value(ws, i, 8) if ws.max_column >= 8 else None  # 最终花费可能在列8或列9
+            # 根据表头映射读取数据
+            def get_col_value(col_name, default=None):
+                col_idx = header_cols.get(col_name)
+                if col_idx:
+                    return safe_get_cell_value(ws, i, col_idx)
+                return default
             
-            # 检查值是否为空（None或空字符串）
-            def is_empty(val):
-                return val is None or (isinstance(val, str) and not val.strip())
+            val_budget_new = get_col_value('预算费用')  # 新格式：直接有"预算费用"列
+            val_1st = get_col_value('1st预算')
+            val_2nd = get_col_value('2nd预算')
+            val_current_new = get_col_value('当前投入')  # 新格式：当前投入
+            val_old_actual = get_col_value('最终实际花费')  # 旧格式：最终实际花费
+            val_final = get_col_value('最终花费')
             
-            # 处理预算费用：合并1st和2nd，优先使用2nd
+            # 处理预算费用：优先使用新格式的"预算费用"，否则合并1st和2nd
             val_budget = 0
-            if not is_empty(val_2nd):
+            if not is_empty(val_budget_new):
+                try:
+                    val_budget = float(val_budget_new)
+                except (ValueError, TypeError):
+                    val_budget = 0
+            elif not is_empty(val_2nd):
                 try:
                     val_budget = float(val_2nd)
                 except (ValueError, TypeError):
@@ -611,20 +741,30 @@ def normalize_imported_data():
                             val_budget = float(val_1st)
                         except (ValueError, TypeError):
                             val_budget = 0
+                    else:
+                        val_budget = 0
             elif not is_empty(val_1st):
                 try:
                     val_budget = float(val_1st)
                 except (ValueError, TypeError):
                     val_budget = 0
             
-            # 处理当前投入：如果为空，设为0
-            if is_empty(val_current):
-                val_current = 0
-            else:
+            # 处理当前投入：优先使用新格式的"当前投入"，否则使用旧格式的"最终实际花费"
+            val_current = 0
+            if not is_empty(val_current_new):
                 try:
-                    val_current = float(val_current)
+                    val_current = float(val_current_new)
                 except (ValueError, TypeError):
                     val_current = 0
+            elif not is_empty(val_old_actual):
+                try:
+                    val_current = float(val_old_actual)
+                except (ValueError, TypeError):
+                    val_current = 0
+            
+            # 验证：如果当前投入等于预算，可能是错误数据，设为0
+            if val_budget > 0 and val_current > 0 and abs(val_budget - val_current) < 0.01:
+                val_current = 0
             
             # 处理最终花费：如果为空，设为0
             if is_empty(val_final):
@@ -639,10 +779,16 @@ def normalize_imported_data():
             val_diff = val_budget - val_final
             
             # 更新Excel中的值（保留0值，因为0是有效的）
-            safe_set_cell_value(ws, i, 5, val_budget if val_budget > 0 else None)  # 预算费用
-            safe_set_cell_value(ws, i, 6, val_current if val_current > 0 else None)  # 当前投入
-            safe_set_cell_value(ws, i, 7, val_final if val_final > 0 else None)  # 最终花费
-            safe_set_cell_value(ws, i, 8, val_diff if val_diff != 0 else None)  # 差价
+            # 根据表头映射更新，如果没有找到对应列，使用默认位置
+            budget_col = header_cols.get('预算费用', header_cols.get('2nd预算', 5))
+            current_col = header_cols.get('当前投入', header_cols.get('最终实际花费', 6))
+            final_col = header_cols.get('最终花费', 7)
+            diff_col = header_cols.get('差价', 8)
+            
+            safe_set_cell_value(ws, i, budget_col, val_budget if val_budget > 0 else None)  # 预算费用
+            safe_set_cell_value(ws, i, current_col, val_current if val_current > 0 else None)  # 当前投入
+            safe_set_cell_value(ws, i, final_col, val_final if val_final > 0 else None)  # 最终花费
+            safe_set_cell_value(ws, i, diff_col, val_diff if val_diff != 0 else None)  # 差价
     
     # 更新合计
     update_totals_in_excel()
