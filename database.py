@@ -328,7 +328,17 @@ def add_item(item_data: Dict, category_name: str = None) -> int:
     ))
     
     item_id = cursor.lastrowid
+    
+    # 提交事务，确保数据立即写入
     conn.commit()
+    
+    # 在WAL模式下，执行checkpoint确保数据同步到主数据库文件
+    # 这对于持久化存储（如COS挂载）很重要
+    try:
+        conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+    except:
+        pass  # 如果checkpoint失败，不影响主流程
+    
     conn.close()
     return item_id
 
@@ -380,7 +390,16 @@ def update_item(item_id: int, item_data: Dict, category_name: str = None):
         item_id
     ))
     
+    # 提交事务，确保数据立即写入
     conn.commit()
+    
+    # 在WAL模式下，执行checkpoint确保数据同步到主数据库文件
+    # 这对于持久化存储（如COS挂载）很重要
+    try:
+        conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+    except:
+        pass  # 如果checkpoint失败，不影响主流程
+    
     conn.close()
 
 def delete_items(item_ids: List[int]) -> str:

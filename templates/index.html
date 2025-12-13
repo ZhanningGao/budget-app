@@ -2045,17 +2045,20 @@
                     categoryItems.forEach((item, index) => {
                         const displaySeqNum = index + 1;  // 显示序号从1开始
                         
+                        // 安全解析数值：处理空字符串、null、undefined等情况
+                        const parseSafeFloat = (val) => {
+                            if (val === '' || val === null || val === undefined) return 0;
+                            const num = parseFloat(val);
+                            return isNaN(num) ? 0 : num;
+                        };
+                        
                         // 兼容旧格式
-                        const val1st = parseFloat(item['1st预算费用']) || 0;
-                        const val2nd = parseFloat(item['2nd预算费用']) || 0;
-                        const valBudget = parseFloat(item['预算费用']) || (val2nd > 0 ? val2nd : val1st);
-                        const valCurrent = parseFloat(item['当前投入']) || parseFloat(item['最终实际花费']) || 0;
-                        // 确保最终花费默认为0，不能等于预算
-                        let valFinal = parseFloat(item['最终花费']) || 0;
-                        // 如果最终花费等于预算（可能是错误数据），重置为0
-                        if (valFinal === valBudget && valFinal > 0) {
-                            valFinal = 0;
-                        }
+                        const val1st = parseSafeFloat(item['1st预算费用']);
+                        const val2nd = parseSafeFloat(item['2nd预算费用']);
+                        const valBudget = parseSafeFloat(item['预算费用']) || (val2nd > 0 ? val2nd : val1st);
+                        const valCurrent = parseSafeFloat(item['当前投入']) || parseSafeFloat(item['最终实际花费']);
+                        // 直接使用最终花费的值，不再重置为0（用户可能确实设置了最终花费等于预算）
+                        let valFinal = parseSafeFloat(item['最终花费']);
                         const valDiff = valBudget - valFinal;
                         
                         categoryTotalBudget += valBudget;
@@ -2276,12 +2279,15 @@
                 }
             }
             
-            // 确保最终花费默认为0，不能等于预算
-            let valFinal = parseFloat(item['最终花费']) || 0;
-            // 如果最终花费等于预算（可能是错误数据），重置为0
-            if (valFinal === valBudget && valFinal > 0) {
-                valFinal = 0;
-            }
+            // 安全解析数值：处理空字符串、null、undefined等情况
+            const parseSafeFloat = (val) => {
+                if (val === '' || val === null || val === undefined) return 0;
+                const num = parseFloat(val);
+                return isNaN(num) ? 0 : num;
+            };
+            
+            // 直接使用最终花费的值，不再重置为0（用户可能确实设置了最终花费等于预算）
+            let valFinal = parseSafeFloat(item['最终花费']);
             // 填充表单字段（0值也要显示，不能转为空字符串）
             const budgetField = document.querySelector('[name="预算费用"]');
             const currentField = document.querySelector('[name="当前投入"]');
@@ -2382,11 +2388,8 @@
             const val2nd = parseFloat(item['2nd预算费用']) || 0;
             const valBudget = parseFloat(item['预算费用']) || (val2nd > 0 ? val2nd : val1st);
             const valCurrent = parseFloat(item['当前投入']) || parseFloat(item['最终实际花费']) || 0;
+            // 直接使用最终花费的值，不再重置为0（因为用户可能确实设置了最终花费等于预算）
             let valFinal = parseFloat(item['最终花费']) || 0;
-            // 如果最终花费等于预算（可能是错误数据），重置为0
-            if (valFinal === valBudget && valFinal > 0) {
-                valFinal = 0;
-            }
             const valDiff = valBudget - valFinal;
             
             let html = '';
@@ -2576,12 +2579,19 @@
             // 如果items中有该项目，保留其他字段的值
             if (item) {
                 // 保留原有字段值
+                // 注意：后端可能返回空字符串（表示0），需要正确解析
                 updateData['项目'] = item['项目'] || '';
                 updateData['单位'] = item['单位'] || '';
                 updateData['预算数量'] = item['预算数量'] || '';
-                updateData['预算费用'] = parseFloat(item['预算费用']) || 0;
-                updateData['当前投入'] = parseFloat(item['当前投入']) || 0;
-                updateData['最终花费'] = parseFloat(item['最终花费']) || 0;
+                // 安全解析数值：空字符串、null、undefined 都转为 0
+                const parseSafeFloat = (val) => {
+                    if (val === '' || val === null || val === undefined) return 0;
+                    const num = parseFloat(val);
+                    return isNaN(num) ? 0 : num;
+                };
+                updateData['预算费用'] = parseSafeFloat(item['预算费用']);
+                updateData['当前投入'] = parseSafeFloat(item['当前投入']);
+                updateData['最终花费'] = parseSafeFloat(item['最终花费']);
                 updateData['备注'] = item['备注'] || '';
             } else {
                 // 如果items中没有，设置默认值
@@ -2596,14 +2606,18 @@
             
             // 更新对应字段的值
             if (fieldName === '预算费用' || fieldName === '当前投入' || fieldName === '最终花费') {
-                updateData[fieldName] = parseFloat(newValue) || 0;
+                // 处理数值字段：如果为空字符串或无效值，设为0
+                const numValue = newValue === '' || newValue === null || newValue === undefined 
+                    ? 0 
+                    : (isNaN(parseFloat(newValue)) ? 0 : parseFloat(newValue));
+                updateData[fieldName] = numValue;
             } else {
                 updateData[fieldName] = newValue;
             }
             
             // 重新计算差价（使用更新后的值）
-            const valBudget = updateData['预算费用'];
-            const valFinal = updateData['最终花费'];
+            const valBudget = parseFloat(updateData['预算费用']) || 0;
+            const valFinal = parseFloat(updateData['最终花费']) || 0;
             updateData['差价'] = Math.round(valBudget - valFinal);
             
             try {
@@ -2623,23 +2637,22 @@
                     const savedItemId = sessionStorage.getItem('currentEditingItemId');
                     if (savedItemId) {
                         const itemId = parseInt(savedItemId);
-                        // 重新加载数据
-                        loadData();
-                        // 重新显示详情页面
+                        // 重新加载数据，等待完成后再显示详情
+                        await loadData(false);  // 不保留页面状态，确保数据完全刷新
+                        // 等待DOM渲染完成后再显示详情
                         setTimeout(() => {
-                            // 等待数据加载完成后再显示详情
-                            setTimeout(() => {
-                                showItemDetail(itemId);
-                            }, 200);
+                            showItemDetail(itemId);
                         }, 100);
                     } else {
                         // 如果没有保存的ID，只重新加载数据
-                        loadData();
+                        await loadData(false);
                     }
                 } else {
-                    showMessage('保存失败: ' + result.error, 'error');
+                    console.error('保存失败:', result);
+                    showMessage('保存失败: ' + (result.error || '未知错误'), 'error');
                 }
             } catch (error) {
+                console.error('保存请求失败:', error);
                 showMessage('保存失败: ' + error.message, 'error');
             }
         }
