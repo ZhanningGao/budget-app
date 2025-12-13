@@ -88,6 +88,8 @@ DB_FILE, BACKUP_DIR, USE_PERSISTENT = _get_db_paths()
 
 def get_db_connection():
     """获取数据库连接，带错误处理和回退机制"""
+    global DB_FILE, BACKUP_DIR, USE_PERSISTENT  # 在函数开始处声明 global
+    
     max_retries = 3
     retry_delay = 1  # 秒
     
@@ -103,7 +105,6 @@ def get_db_connection():
                     # 如果持久存储不可用，尝试回退到本地存储
                     if USE_PERSISTENT:
                         print(f"⚠️ 持久存储不可用，尝试使用本地存储")
-                        global DB_FILE, BACKUP_DIR, USE_PERSISTENT
                         DB_FILE = LOCAL_DB_FILE
                         BACKUP_DIR = LOCAL_BACKUP_DIR
                         USE_PERSISTENT = False
@@ -126,7 +127,6 @@ def get_db_connection():
                     # 如果是持久存储的问题，尝试回退到本地存储
                     if USE_PERSISTENT and attempt == 1:
                         print(f"⚠️ 持久存储I/O错误，尝试回退到本地存储")
-                        global DB_FILE, BACKUP_DIR, USE_PERSISTENT
                         DB_FILE = LOCAL_DB_FILE
                         BACKUP_DIR = LOCAL_BACKUP_DIR
                         USE_PERSISTENT = False
