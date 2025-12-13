@@ -87,13 +87,59 @@ _migrate_to_persistent_storage()
 DB_FILE, BACKUP_DIR, USE_PERSISTENT = _get_db_paths()
 
 def get_db_connection():
-    """获取数据库连接"""
-    # 添加超时设置，避免数据库锁定
-    conn = sqlite3.connect(DB_FILE, timeout=30.0)
-    conn.row_factory = sqlite3.Row  # 使结果可以像字典一样访问
-    # 启用WAL模式，提高并发性能
-    conn.execute('PRAGMA journal_mode=WAL')
-    return conn
+    """获取数据库连接，带错误处理和回退机制"""
+    max_retries = 3
+    retry_delay = 1  # 秒
+    
+    for attempt in range(max_retries):
+        try:
+            # 检查数据库文件所在目录是否可写
+            db_dir = os.path.dirname(DB_FILE)
+            if not os.path.exists(db_dir):
+                try:
+                    os.makedirs(db_dir, exist_ok=True)
+                except Exception as e:
+                    print(f"⚠️ 无法创建数据库目录 {db_dir}: {e}")
+                    # 如果持久存储不可用，尝试回退到本地存储
+                    if USE_PERSISTENT:
+                        print(f"⚠️ 持久存储不可用，尝试使用本地存储")
+                        global DB_FILE, BACKUP_DIR, USE_PERSISTENT
+                        DB_FILE = LOCAL_DB_FILE
+                        BACKUP_DIR = LOCAL_BACKUP_DIR
+                        USE_PERSISTENT = False
+                        db_dir = os.path.dirname(DB_FILE)
+                        os.makedirs(db_dir, exist_ok=True)
+            
+            # 添加超时设置，避免数据库锁定
+            conn = sqlite3.connect(DB_FILE, timeout=30.0)
+            conn.row_factory = sqlite3.Row  # 使结果可以像字典一样访问
+            # 启用WAL模式，提高并发性能
+            conn.execute('PRAGMA journal_mode=WAL')
+            return conn
+        except sqlite3.OperationalError as e:
+            error_msg = str(e).lower()
+            if 'disk i/o error' in error_msg or 'io error' in error_msg:
+                print(f"⚠️ 数据库I/O错误 (尝试 {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(retry_delay)
+                    # 如果是持久存储的问题，尝试回退到本地存储
+                    if USE_PERSISTENT and attempt == 1:
+                        print(f"⚠️ 持久存储I/O错误，尝试回退到本地存储")
+                        global DB_FILE, BACKUP_DIR, USE_PERSISTENT
+                        DB_FILE = LOCAL_DB_FILE
+                        BACKUP_DIR = LOCAL_BACKUP_DIR
+                        USE_PERSISTENT = False
+                        os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
+                else:
+                    # 最后一次尝试失败，抛出更友好的错误
+                    raise Exception(f"数据库I/O错误: 无法访问数据库文件。可能是存储挂载问题或权限问题。请检查存储配置。")
+            else:
+                # 其他操作错误，直接抛出
+                raise
+        except Exception as e:
+            # 其他异常，直接抛出
+            raise
 
 def init_database():
     """初始化数据库，创建表结构"""

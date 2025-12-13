@@ -749,7 +749,13 @@ def load_data():
         })
     except Exception as e:
         import traceback
-        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+        error_msg = str(e)
+        # 提供更友好的错误信息
+        if 'disk i/o error' in error_msg.lower() or 'io error' in error_msg.lower():
+            error_msg = '数据库I/O错误: 无法访问数据库文件。可能是存储挂载问题、权限问题或存储空间不足。请检查存储配置或联系管理员。'
+        elif 'database is locked' in error_msg.lower():
+            error_msg = '数据库被锁定: 可能有其他操作正在进行。请稍后重试。'
+        return jsonify({'success': False, 'error': error_msg, 'traceback': traceback.format_exc()}), 500
 
 @app.route('/api/add', methods=['POST'])
 def add_item_route():
